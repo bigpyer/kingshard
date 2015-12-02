@@ -68,13 +68,16 @@ func Open(addr string, user string, password string, dbName string, maxConnNum i
 		db.InitConnNum = InitConnCount
 	}
 	//check connection
+	/* 在建立DB连接池之前首先检查是否可以正确建立连接 */
 	db.checkConn, err = db.newConn()
 	if err != nil {
 		db.Close()
 		return nil, errors.ErrDatabaseClose
 	}
 
+	/* TODO 为什么是放入channel，空闲连接channel */
 	db.idleConns = make(chan *Conn, db.maxConnNum)
+	/* 缓存连接channel,优先使用cache channel中的连接 */
 	db.cacheConns = make(chan *Conn, db.maxConnNum)
 	atomic.StoreInt32(&(db.state), Unknown)
 

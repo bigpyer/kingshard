@@ -97,13 +97,18 @@ func (c *ClientConn) handleStmtPrepare(sql string) error {
 	s.id = c.stmtId
 	c.stmtId++
 
+	/* 应答prepare结果 */
 	if err = c.writePrepare(s); err != nil {
 		return err
 	}
 
 	s.ResetParams()
-
 	c.stmts[s.id] = s
+
+	err = co.ClosePrepare(t.GetId())
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -232,6 +237,7 @@ func (c *ClientConn) handleStmtExecute(data []byte) error {
 	var err error
 
 	switch stmt := s.s.(type) {
+	/* 根据prepare语句中的处理类型，分别进行处理 */
 	case *sqlparser.Select:
 		err = c.handlePrepareSelect(stmt, s.sql, s.args)
 	case *sqlparser.Insert:
@@ -272,15 +278,17 @@ func (c *ClientConn) handlePrepareSelect(stmt *sqlparser.Select, sql string, arg
 
 	var rs []*mysql.Result
 	rs, err = c.executeInNode(conn, sql, args)
-
 	if err != nil {
 		golog.Error("ClientConn", "handlePrepareSelect", err.Error(), c.connectionId)
 		return err
 	}
 
-	err = c.mergeSelectResult(rs, stmt)
-	if err != nil {
-		golog.Error("ClientConn", "handlePrepareSelect", err.Error(), c.connectionId)
+	status := c.status | rs[0].Status
+	if rs[0].Resultset != nil {
+		err = c.writeResultset(status, rs[0].Resultset)
+	} else {
+		r := c.newEmptyResultset(stmt)
+		err = c.writeResultset(status, r)
 	}
 
 	return err
@@ -308,8 +316,16 @@ func (c *ClientConn) handlePrepareExec(stmt sqlparser.Statement, sql string, arg
 	rs, err = c.executeInNode(conn, sql, args)
 	c.closeConn(conn, false)
 
-	if err == nil {
-		err = c.mergeExecResult(rs)
+	if err != nil {
+		golog.Error("ClientConn", "handlePrepareExec", err.Error(), c.connectionId)
+		return err
+	}
+
+	status := c.status | rs[0].Status
+	if rs[0].Resultset != nil {
+		err = c.writeResultset(status, rs[0].Resultset)
+	} else {
+		err = c.writeOK(rs[0])
 	}
 
 	return err

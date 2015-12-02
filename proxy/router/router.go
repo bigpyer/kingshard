@@ -99,6 +99,7 @@ func (r *Rule) checkUpdateExprs(exprs sqlparser.UpdateExprs) error {
 
 //build router according to the config file
 func NewRouter(schemaConfig *config.SchemaConfig) (*Router, error) {
+	/* 分表的default node必须包含载nodes节点中 */
 	if !includeNode(schemaConfig.Nodes, schemaConfig.Default) {
 		return nil, fmt.Errorf("default node[%s] not in the nodes list.",
 			schemaConfig.Default)
@@ -229,8 +230,10 @@ func (r *Router) buildSelectPlan(statement sqlparser.Statement) (*Plan, error) {
 	var tableName string
 	stmt := statement.(*sqlparser.Select)
 	switch v := (stmt.From[0]).(type) {
+	/* alias语句(简单语句) */
 	case *sqlparser.AliasedTableExpr:
 		tableName = sqlparser.String(v.Expr)
+	/* join语句 */
 	case *sqlparser.JoinTableExpr:
 		if ate, ok := (v.LeftExpr).(*sqlparser.AliasedTableExpr); ok {
 			tableName = sqlparser.String(ate.Expr)
@@ -251,6 +254,7 @@ func (r *Router) buildSelectPlan(statement sqlparser.Statement) (*Plan, error) {
 	}
 	plan.TableIndexs = makeList(0, len(plan.Rule.TableToNode))
 
+	/* 计算表下标和node下标 */
 	err := plan.calRouteIndexs()
 	if err != nil {
 		golog.Error("Route", "BuildSelectPlan", err.Error(), 0)
@@ -279,6 +283,7 @@ func (r *Router) buildInsertPlan(statement sqlparser.Statement) (*Plan, error) {
 	plan.Rule = r.GetRule(sqlparser.String(stmt.Table))
 
 	if stmt.OnDup != nil {
+		/* set类型的insert语句 */
 		err := plan.Rule.checkUpdateExprs(sqlparser.UpdateExprs(stmt.OnDup))
 		if err != nil {
 			return nil, err
@@ -288,12 +293,14 @@ func (r *Router) buildInsertPlan(statement sqlparser.Statement) (*Plan, error) {
 	plan.Criteria = plan.checkValuesType(stmt.Rows.(sqlparser.Values))
 	plan.TableIndexs = makeList(0, len(plan.Rule.TableToNode))
 
+	/* 计算路由下标 */
 	err := plan.calRouteIndexs()
 	if err != nil {
 		golog.Error("Route", "BuildInsertPlan", err.Error(), 0)
 		return nil, err
 	}
 
+	/* 生成insert sql语句 */
 	err = r.generateInsertSql(plan, stmt)
 	if err != nil {
 		return nil, err

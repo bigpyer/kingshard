@@ -89,6 +89,7 @@ func main() {
 	}
 
 	var svr *server.Server
+	/* 构造唯一的server实例，加载配置信息，建立与后端mysql的连接池*/
 	svr, err = server.NewServer(cfg)
 	if err != nil {
 		golog.Error("main", "main", err.Error(), 0)
@@ -103,7 +104,9 @@ func main() {
 		syscall.SIGTERM,
 		syscall.SIGQUIT)
 
+	/*单独的协程做信号监控*/
 	go func() {
+		/* 阻塞 */
 		sig := <-sc
 		golog.Info("main", "main", "Got signal", 0, "signal", sig)
 		golog.GlobalSysLogger.Close()

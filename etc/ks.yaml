@@ -21,7 +21,7 @@ log_level : debug
 # node is an agenda for real remote mysql server.
 nodes :
 - 
-    name : node1 
+    name : 127.0.0.1@user
 
     # default max conns for mysql server
     max_conns_limit : 8
@@ -60,7 +60,7 @@ nodes :
 # schema defines which db can be used by client and this db's sql will be executed in which nodes
 schema :
     db : kingshard
-    nodes: [node1,node2]
+    nodes: [127.0.0.1@user,node2]
     default: node1      
     shard:
     -   

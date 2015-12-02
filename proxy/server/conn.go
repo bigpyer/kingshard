@@ -94,12 +94,14 @@ func (c *ClientConn) IsAllowConnect() bool {
 }
 
 func (c *ClientConn) Handshake() error {
+	/* 要求应用端传送用户名、密码信息 */
 	if err := c.writeInitialHandshake(); err != nil {
 		golog.Error("server", "Handshake", err.Error(),
 			c.connectionId, "msg", "send initial handshake error")
 		return err
 	}
 
+	/* 校验应用端传送的用户名、密码信息 */
 	if err := c.readHandshakeResponse(); err != nil {
 		golog.Error("server", "readHandshakeResponse",
 			err.Error(), c.connectionId,
@@ -110,6 +112,7 @@ func (c *ClientConn) Handshake() error {
 		return err
 	}
 
+	/* 应答校验结果 */
 	if err := c.writeOK(nil); err != nil {
 		golog.Error("server", "readHandshakeResponse",
 			"write ok fail",
@@ -117,6 +120,7 @@ func (c *ClientConn) Handshake() error {
 		return err
 	}
 
+	/* TODO Sequence的作用? */
 	c.pkg.Sequence = 0
 
 	return nil
@@ -225,6 +229,7 @@ func (c *ClientConn) readHandshakeResponse() error {
 	pos++
 	auth := data[pos : pos+authLen]
 
+	/* ks配置中的ks密码非node中的密码 */
 	checkAuth := mysql.CalcPassword(c.salt, []byte(c.proxy.cfg.Password))
 	if !bytes.Equal(auth, checkAuth) {
 		golog.Error("ClientConn", "readHandshakeResponse", "error", 0,
@@ -244,6 +249,7 @@ func (c *ClientConn) readHandshakeResponse() error {
 		db := string(data[pos : pos+bytes.IndexByte(data[pos:], 0)])
 		pos += len(c.db) + 1
 
+		/* 有默认use db? */
 		if err := c.useDB(db); err != nil {
 			return err
 		}
@@ -269,12 +275,14 @@ func (c *ClientConn) Run() {
 	}()
 
 	for {
+		/* 读取数据 */
 		data, err := c.readPacket()
 
 		if err != nil {
 			return
 		}
 
+		/* 按照mysql协议解析命令(只实现了部分命令)、处理数据(节点解析)、返回处理结果 */
 		if err := c.dispatch(data); err != nil {
 			golog.Error("server", "Run",
 				err.Error(), c.connectionId,
@@ -286,6 +294,7 @@ func (c *ClientConn) Run() {
 			return
 		}
 
+		/* TODO 序号的作用?mysql协议的一部分，从0开始，新命令到达是重置为0 */
 		c.pkg.Sequence = 0
 	}
 }
@@ -295,21 +304,27 @@ func (c *ClientConn) dispatch(data []byte) error {
 	data = data[1:]
 
 	switch cmd {
+	/* 客户端退出命令 */
 	case mysql.COM_QUIT:
 		c.Close()
 		return nil
+		/* 包含SELECT、INSERT、UPDATE、DELETE、REPLACE、SET、BEGIN、COMMIT、ROLLBACK、ADMIN、USEDB等 */
 	case mysql.COM_QUERY:
 		return c.handleQuery(hack.String(data))
+		/* 探测 */
 	case mysql.COM_PING:
 		return c.writeOK(nil)
+		/* 切换数据库 */
 	case mysql.COM_INIT_DB:
 		if err := c.useDB(hack.String(data)); err != nil {
 			return err
 		} else {
 			return c.writeOK(nil)
 		}
+		/* 获取数据库字段信息,等同于show fields from table */
 	case mysql.COM_FIELD_LIST:
 		return c.handleFieldList(data)
+		/* prepare绑定变量支持(一般在存储过程中使用) */
 	case mysql.COM_STMT_PREPARE:
 		return c.handleStmtPrepare(hack.String(data))
 	case mysql.COM_STMT_EXECUTE:
@@ -336,6 +351,7 @@ func (c *ClientConn) useDB(db string) error {
 		return mysql.NewDefaultError(mysql.ER_NO_DB_ERROR)
 	}
 
+	/* 使用schema中的默认节点 */
 	nodeName := c.schema.rule.DefaultRule.Nodes[0]
 
 	n := c.proxy.GetNode(nodeName)

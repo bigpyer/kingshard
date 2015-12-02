@@ -39,6 +39,7 @@ type Node struct {
 	sync.RWMutex
 	Master *DB
 
+	/* 多从数组 */
 	Slave          []*DB
 	LastSlaveIndex int
 	RoundRobinQ    []int
@@ -64,6 +65,7 @@ func (n *Node) CheckNode() {
 	for {
 		n.checkMaster()
 		n.checkSlave()
+		/* 每间隔16秒检查一次 */
 		time.Sleep(16 * time.Second)
 	}
 }
@@ -324,10 +326,13 @@ func (n *Node) ParseSlave(slaveStr string) error {
 	if len(slaveStr) == 0 {
 		return nil
 	}
+	/* 祛除头尾的SlaveSplit字符串 */
 	slaveStr = strings.Trim(slaveStr, SlaveSplit)
 	slaveArray := strings.Split(slaveStr, SlaveSplit)
 	count := len(slaveArray)
+	/* 从库数组 */
 	n.Slave = make([]*DB, 0, count)
+	/* 从库权重数组 */
 	n.SlaveWeights = make([]int, 0, count)
 
 	//parse addr and weight
@@ -342,11 +347,13 @@ func (n *Node) ParseSlave(slaveStr string) error {
 			weight = 1
 		}
 		n.SlaveWeights = append(n.SlaveWeights, weight)
+		/* 建立从库缓存和空闲连接池 */
 		if db, err = n.OpenDB(addrAndWeight[0]); err != nil {
 			return err
 		}
 		n.Slave = append(n.Slave, db)
 	}
+	/* 初始化slave负载均衡机制 */
 	n.InitBalancer()
 	return nil
 }

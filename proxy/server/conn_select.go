@@ -51,6 +51,7 @@ func (c *ClientConn) handleFieldList(data []byte) error {
 		return mysql.NewDefaultError(mysql.ER_NO_DB_ERROR)
 	}
 
+	/* 获取默认节点 */
 	nodeName := c.schema.rule.GetRule(table).Nodes[0]
 
 	n := c.proxy.GetNode(nodeName)
@@ -93,7 +94,9 @@ func (c *ClientConn) writeFieldList(status uint16, fs []*mysql.Field) error {
 
 //处理select语句
 func (c *ClientConn) handleSelect(stmt *sqlparser.Select, args []interface{}) error {
+	/* select默认使用从实例 */
 	var fromSlave bool = true
+	/* 根据语句类型，构造执行计划 */
 	plan, err := c.schema.rule.BuildPlan(stmt)
 	if err != nil {
 		return err
@@ -105,16 +108,19 @@ func (c *ClientConn) handleSelect(stmt *sqlparser.Select, args []interface{}) er
 		}
 	}
 
+	/* TODO 获取分片连接? */
 	conns, err := c.getShardConns(fromSlave, plan)
 	if err != nil {
 		golog.Error("ClientConn", "handleSelect", err.Error(), c.connectionId)
 		return err
 	}
+	/* 如果连接为空，应答空结果，不再继续执行 */
 	if conns == nil {
 		r := c.newEmptyResultset(stmt)
 		return c.writeResultset(c.status, r)
 	}
 
+	/* 执行重新拼装的sql，获取查询结果 */
 	var rs []*mysql.Result
 	rs, err = c.executeInMultiNodes(conns, plan.RewrittenSqls, args)
 	c.closeShardConns(conns, false)
@@ -123,6 +129,7 @@ func (c *ClientConn) handleSelect(stmt *sqlparser.Select, args []interface{}) er
 		return err
 	}
 
+	/* 汇总并应答查询结果 */
 	err = c.mergeSelectResult(rs, stmt)
 	if err != nil {
 		golog.Error("ClientConn", "handleSelect", err.Error(), c.connectionId)

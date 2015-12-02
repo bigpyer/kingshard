@@ -68,6 +68,7 @@ type ShardConfig struct {
 
 func ParseConfigData(data []byte) (*Config, error) {
 	var cfg Config
+	/* FIXME 此处不需要数据类型转换 */
 	if err := yaml.Unmarshal([]byte(data), &cfg); err != nil {
 		return nil, err
 	}

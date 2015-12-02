@@ -28,6 +28,7 @@ func (c *ClientConn) isAutoCommit() bool {
 	return c.status&mysql.SERVER_STATUS_AUTOCOMMIT > 0
 }
 
+/* 更新句柄状态为事务中 */
 func (c *ClientConn) handleBegin() error {
 	c.status |= mysql.SERVER_STATUS_IN_TRANS
 	return c.writeOK(nil)
