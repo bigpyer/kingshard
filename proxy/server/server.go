@@ -62,6 +62,7 @@ func (s *Server) parseAllowIps() error {
 		return nil
 	}
 	ipVec := strings.Split(cfg.AllowIps, ",")
+	/* 使用切片的方式 */
 	s.allowips = make([]net.IP, 0, 10)
 	for _, ip := range ipVec {
 		s.allowips = append(s.allowips, net.ParseIP(strings.TrimSpace(ip)))
@@ -73,6 +74,7 @@ func (s *Server) parseAllowIps() error {
 func (s *Server) parseNode(cfg config.NodeConfig) (*backend.Node, error) {
 	var err error
 	n := new(backend.Node)
+	/* 节点配置 */
 	n.Cfg = cfg
 
 	/* 标记节点下线的间隔时间 */
@@ -83,7 +85,7 @@ func (s *Server) parseNode(cfg config.NodeConfig) (*backend.Node, error) {
 		return nil, err
 	}
 
-	/* TODO 建立ks与从实例连接池,初始化round robin机制? */
+	/* TODO 建立ks与从实例连接池,初始化round robin队列 */
 	err = n.ParseSlave(cfg.Slave)
 	if err != nil {
 		return nil, err
@@ -97,9 +99,11 @@ func (s *Server) parseNode(cfg config.NodeConfig) (*backend.Node, error) {
 
 func (s *Server) parseNodes() error {
 	cfg := s.cfg
+	/* 以nodes数组初始化node字典,字典的key为node中的name */
 	s.nodes = make(map[string]*backend.Node, len(cfg.Nodes))
 
 	for _, v := range cfg.Nodes {
+		/* 不允许有同名node */
 		if _, ok := s.nodes[v.Name]; ok {
 			return fmt.Errorf("duplicate node [%s].", v.Name)
 		}
@@ -110,6 +114,7 @@ func (s *Server) parseNodes() error {
 			return err
 		}
 
+		/* node字典赋值 */
 		s.nodes[v.Name] = n
 	}
 
@@ -124,15 +129,17 @@ func (s *Server) parseSchema() error {
 
 	nodes := make(map[string]*backend.Node)
 	for _, n := range schemaCfg.Nodes {
+		/* 检查节点是否存在 */
 		if s.GetNode(n) == nil {
 			return fmt.Errorf("schema [%s] node [%s] config is not exists.", schemaCfg.DB, n)
 		}
 
+		/* 检查node数组里面是否存在该节点 */
 		if _, ok := nodes[n]; ok {
 			return fmt.Errorf("schema [%s] node [%s] duplicate.", schemaCfg.DB, n)
 		}
 
-		/* 初始化节点数组,n为节点名称 */
+		/* 节点集map赋值 */
 		nodes[n] = s.GetNode(n)
 	}
 
@@ -146,6 +153,7 @@ func (s *Server) parseSchema() error {
 		nodes: nodes,
 		rule:  rule,
 	}
+	/* TODO server端db的作用? */
 	s.db = schemaCfg.DB
 
 	return nil
@@ -166,7 +174,7 @@ func NewServer(cfg *config.Config) (*Server, error) {
 		return nil, err
 	}
 
-	/* 解析节点信息,建立ks与后端实例的连接池 */
+	/* 解析节点信息,建立ks与后端实例的连接池,此处不需要指定DB */
 	if err := s.parseNodes(); err != nil {
 		return nil, err
 	}
@@ -205,9 +213,10 @@ func (s *Server) newClientConn(co net.Conn) *ClientConn {
 	tcpConn.SetNoDelay(false)
 	c.c = tcpConn
 
-	/* 将服务端schema赋值给客户端，没有进行客户端schema中的db校验 */
+	/* 将服务端schema赋值给客户端,为分表做准备 */
 	c.schema = s.GetSchema()
 
+	/* mysql通讯协议结构 */
 	c.pkg = mysql.NewPacketIO(tcpConn)
 	c.proxy = s
 
@@ -217,15 +226,19 @@ func (s *Server) newClientConn(co net.Conn) *ClientConn {
 
 	c.status = mysql.SERVER_STATUS_AUTOCOMMIT
 
+	/* 根据时间生成随机盐 */
 	c.salt, _ = mysql.RandomBuf(20)
 
+	/* node为key，连接为value */
 	c.txConns = make(map[*backend.Node]*backend.BackendConn)
 
 	c.closed = false
 
+	/* 校对值 */
 	c.collation = mysql.DEFAULT_COLLATION_ID
 	c.charset = mysql.DEFAULT_CHARSET
 
+	/* 预编译 */
 	c.stmtId = 0
 	c.stmts = make(map[uint32]*Stmt)
 
@@ -233,7 +246,7 @@ func (s *Server) newClientConn(co net.Conn) *ClientConn {
 }
 
 func (s *Server) onConn(c net.Conn) {
-	/* 新建客户端连接句柄并赋值附加信息 */
+	/* TODO 调用newClientConn需不需要加锁新建客户端连接句柄并赋值附加信息 */
 	conn := s.newClientConn(c) //新建一个conn
 
 	defer func() {
@@ -258,6 +271,7 @@ func (s *Server) onConn(c net.Conn) {
 		conn.Close()
 		return
 	}
+
 	/* 握手认证阶段*/
 	// 服务器 -> 客户端：握手初始化消息
 	// 客户端 -> 服务器：登陆认证消息

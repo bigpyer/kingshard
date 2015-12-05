@@ -52,11 +52,13 @@ func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	flag.Parse()
 
+	/* TODO 使用指针的方式是出于什么考虑? */
 	if len(*configFile) == 0 {
 		fmt.Println("must use a config file")
 		return
 	}
 
+	/* 全局配置 */
 	cfg, err := config.ParseConfigFile(*configFile)
 	if err != nil {
 		fmt.Printf("parse config file error:%v\n", err.Error())
@@ -66,11 +68,13 @@ func main() {
 	//when the log file size greater than 1GB, kingshard will generate a new file
 	if len(cfg.LogPath) != 0 {
 		sysFilePath := path.Join(cfg.LogPath, sysLogName)
+		/* 文件句炳 */
 		sysFile, err := golog.NewRotatingFileHandler(sysFilePath, MaxLogSize, 1)
 		if err != nil {
 			fmt.Printf("new log file error:%v\n", err.Error())
 			return
 		}
+		/* 日志句炳 */
 		golog.GlobalSysLogger = golog.New(sysFile, golog.Lfile|golog.Ltime|golog.Llevel)
 
 		sqlFilePath := path.Join(cfg.LogPath, sqlLogName)

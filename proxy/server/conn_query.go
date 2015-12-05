@@ -112,6 +112,7 @@ func (c *ClientConn) handleQuery(sql string) (err error) {
 	return nil
 }
 
+/* 获取连接的时候设置DB、编码等 */
 func (c *ClientConn) getBackendConn(n *backend.Node, fromSlave bool) (co *backend.BackendConn, err error) {
 	/* 如果没有处于事务中 */
 	if !c.isInTransaction() {
@@ -153,7 +154,7 @@ func (c *ClientConn) getBackendConn(n *backend.Node, fromSlave bool) (co *backen
 		}
 	}
 	//todo, set conn charset, etc...
-	/* TODO 使用默认数据库? */
+	/* 设置数据库? */
 	if err = co.UseDB(c.db); err != nil {
 		return
 	}
@@ -368,7 +369,7 @@ func (c *ClientConn) GetTransExecNode(tokens []string, sql string) (*backend.Nod
 		/* 如果存在注释 */
 		if tokens[0][0] == mysql.COMMENT_PREFIX {
 			nodeName := strings.Trim(tokens[0], mysql.COMMENT_STRING)
-			/* 校验schema中node名称是否配置 */
+			/* 校验传输的node在schema中nodes里是否有配置 */
 			if c.schema.nodes[nodeName] != nil {
 				execNode = c.schema.nodes[nodeName]
 			}
@@ -484,7 +485,7 @@ func (c *ClientConn) GetExecNode(tokens []string,
 		}
 	}
 
-	/* 如果语句中没有指定node，采用默认node */
+	/* 如果语句中没有指定node，或者node不存在，采用默认node */
 	if execNode == nil {
 		defaultRule := c.schema.rule.DefaultRule
 		if len(defaultRule.Nodes) == 0 {
@@ -541,7 +542,7 @@ func (c *ClientConn) preHandleShard(sql string) (bool, error) {
 		return false, err
 	}
 
-	/* TODO 向连接句柄透传并执行sql语句?? */
+	/* 向连接句柄透传并执行sql语句 */
 	rs, err = c.executeInNode(conn, sql, nil)
 	if err != nil {
 		return false, err

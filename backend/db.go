@@ -58,9 +58,11 @@ func Open(addr string, user string, password string, dbName string, maxConnNum i
 
 	if 0 < maxConnNum {
 		db.maxConnNum = maxConnNum
+		/* 最大连接数如果小于16则无效 */
 		if db.maxConnNum < 16 {
 			db.InitConnNum = db.maxConnNum
 		} else {
+			/* 初始连接数为最大连接数的除以4取商 */
 			db.InitConnNum = db.maxConnNum / 4
 		}
 	} else {
@@ -75,13 +77,14 @@ func Open(addr string, user string, password string, dbName string, maxConnNum i
 		return nil, errors.ErrDatabaseClose
 	}
 
-	/* TODO 为什么是放入channel，空闲连接channel */
+	/* TODO 空闲连接channel,当cacheConns耗尽时使用idleConns中的连接 为什么是放入channel */
 	db.idleConns = make(chan *Conn, db.maxConnNum)
 	/* 缓存连接channel,优先使用cache channel中的连接 */
 	db.cacheConns = make(chan *Conn, db.maxConnNum)
 	atomic.StoreInt32(&(db.state), Unknown)
 
 	for i := 0; i < db.maxConnNum; i++ {
+		/* 1/4的连接保存在cacheConns */
 		if i < db.InitConnNum {
 			conn, err := db.newConn()
 			if err != nil {
@@ -90,6 +93,7 @@ func Open(addr string, user string, password string, dbName string, maxConnNum i
 			}
 			db.cacheConns <- conn
 		} else {
+			/* 3/4的连接保存在idleConns */
 			conn := new(Conn)
 			db.idleConns <- conn
 		}

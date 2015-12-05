@@ -99,20 +99,22 @@ func (r *Rule) checkUpdateExprs(exprs sqlparser.UpdateExprs) error {
 
 //build router according to the config file
 func NewRouter(schemaConfig *config.SchemaConfig) (*Router, error) {
-	/* 分表的default node必须包含载nodes节点中 */
+	/* 检查分表的default node是否包含在nodes节点中 */
 	if !includeNode(schemaConfig.Nodes, schemaConfig.Default) {
 		return nil, fmt.Errorf("default node[%s] not in the nodes list.",
 			schemaConfig.Default)
 	}
 
 	rt := new(Router)
-	rt.DB = schemaConfig.DB       //对应schema中的db
-	rt.Nodes = schemaConfig.Nodes //对应schema中的nodes
-	rt.Rules = make(map[string]*Rule, len(schemaConfig.ShardRule))
-	rt.DefaultRule = NewDefaultRule(rt.DB, schemaConfig.Default)
+	rt.DB = schemaConfig.DB                                        //对应schema中的db
+	rt.Nodes = schemaConfig.Nodes                                  //对应schema中的nodes
+	rt.Rules = make(map[string]*Rule, len(schemaConfig.ShardRule)) //对应schema中的shard
+	rt.DefaultRule = NewDefaultRule(rt.DB, schemaConfig.Default)   //对应schema中的default
 
+	/* 遍历shard,检查配置信息 */
 	for _, shard := range schemaConfig.ShardRule {
 		for _, node := range shard.Nodes {
+			/* 检查shard中的节点是否包含在schema中的节点内 */
 			if !includeNode(rt.Nodes, node) {
 				return nil, fmt.Errorf("shard table[%s] node[%s] not in the schema.nodes list:[%s].",
 					shard.Table, node, strings.Join(shard.Nodes, ","))
@@ -123,12 +125,14 @@ func NewRouter(schemaConfig *config.SchemaConfig) (*Router, error) {
 			return nil, err
 		}
 
+		/* DefaultRuleType='default' */
 		if rule.Type == DefaultRuleType {
 			return nil, fmt.Errorf("[default-rule] duplicate, must only one.")
 		} else {
 			if _, ok := rt.Rules[rule.Table]; ok {
 				return nil, fmt.Errorf("table %s rule in %s duplicate", rule.Table, rule.DB)
 			}
+			/* 以表名称为key，加载规则map */
 			rt.Rules[rule.Table] = rule
 		}
 	}
@@ -159,11 +163,13 @@ func parseRule(db string, cfg *config.ShardConfig) (*Rule, error) {
 	r.Nodes = cfg.Nodes //将ruleconfig中的nodes赋值给rule
 	r.TableToNode = make([]int, 0)
 
+	/* shard中localtions中对应节点数量是否和nodes中对应节点数量一致 */
 	if len(cfg.Locations) != len(r.Nodes) {
 		return nil, errors.ErrLocationsCount
 	}
 	for i := 0; i < len(cfg.Locations); i++ {
 		for j := 0; j < cfg.Locations[i]; j++ {
+			/* [0,0,0,0,1,1,1,1]*/
 			r.TableToNode = append(r.TableToNode, i)
 		}
 	}
@@ -180,6 +186,7 @@ func parseShard(r *Rule, cfg *config.ShardConfig) error {
 		//hash shard
 		r.Shard = &HashShard{ShardNum: len(r.TableToNode)}
 	} else if r.Type == RangeRuleType {
+		//range shard
 		rs, err := ParseNumSharding(cfg.Locations, cfg.TableRowLimit)
 		if err != nil {
 			return err
@@ -282,6 +289,7 @@ func (r *Router) buildInsertPlan(statement sqlparser.Statement) (*Plan, error) {
 	//根据sql语句的表，获得对应的分片规则
 	plan.Rule = r.GetRule(sqlparser.String(stmt.Table))
 
+	/* OnDup含义 */
 	if stmt.OnDup != nil {
 		/* set类型的insert语句 */
 		err := plan.Rule.checkUpdateExprs(sqlparser.UpdateExprs(stmt.OnDup))
@@ -293,14 +301,14 @@ func (r *Router) buildInsertPlan(statement sqlparser.Statement) (*Plan, error) {
 	plan.Criteria = plan.checkValuesType(stmt.Rows.(sqlparser.Values))
 	plan.TableIndexs = makeList(0, len(plan.Rule.TableToNode))
 
-	/* 计算路由下标 */
+	/* 计算分表目标节点 */
 	err := plan.calRouteIndexs()
 	if err != nil {
 		golog.Error("Route", "BuildInsertPlan", err.Error(), 0)
 		return nil, err
 	}
 
-	/* 生成insert sql语句 */
+	/* 重新生成insert sql语句 */
 	err = r.generateInsertSql(plan, stmt)
 	if err != nil {
 		return nil, err

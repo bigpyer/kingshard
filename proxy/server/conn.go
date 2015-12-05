@@ -138,6 +138,7 @@ func (c *ClientConn) Close() error {
 	return nil
 }
 
+/* 将salt信息带下去 */
 func (c *ClientConn) writeInitialHandshake() error {
 	data := make([]byte, 4, 128)
 
@@ -241,6 +242,7 @@ func (c *ClientConn) readHandshakeResponse() error {
 
 	pos += authLen
 
+	/* 是否有DB使用标识 */
 	if c.capability&mysql.CLIENT_CONNECT_WITH_DB > 0 {
 		if len(data[pos:]) == 0 {
 			return nil
@@ -308,7 +310,7 @@ func (c *ClientConn) dispatch(data []byte) error {
 	case mysql.COM_QUIT:
 		c.Close()
 		return nil
-		/* 包含SELECT、INSERT、UPDATE、DELETE、REPLACE、SET、BEGIN、COMMIT、ROLLBACK、ADMIN、USEDB等 */
+		/* 包含SELECT、INSERT、UPDATE、DELETE、REPLACE、SET、BEGIN、COMMIT、ROLLBACK、ADMIN等 */
 	case mysql.COM_QUERY:
 		return c.handleQuery(hack.String(data))
 		/* 探测 */
