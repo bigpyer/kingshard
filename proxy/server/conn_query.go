@@ -64,13 +64,14 @@ func (c *ClientConn) handleQuery(sql string) (err error) {
 
 	var stmt sqlparser.Statement
 
-	/* 需要分表或是自定义命令，则需要我们解析sql语句 */
+	/* 需要分表或是自定义sql语句，则需要我们自行解析sql语句 */
 	stmt, err = sqlparser.Parse(sql)
 	if err != nil {
 		golog.Error("server", "parse", err.Error(), 0, "hasHandled", hasHandled, "sql", sql)
 		return err
 	}
 
+	/* 类型查询 */
 	switch v := stmt.(type) {
 	/* 处理SELECT */
 	case *sqlparser.Select:

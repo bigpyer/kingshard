@@ -28,7 +28,7 @@ func (c *ClientConn) isAutoCommit() bool {
 	return c.status&mysql.SERVER_STATUS_AUTOCOMMIT > 0
 }
 
-/* 更新句柄状态为事务中 */
+/* 更新客户端连接状态为事务中 */
 func (c *ClientConn) handleBegin() error {
 	c.status |= mysql.SERVER_STATUS_IN_TRANS
 	return c.writeOK(nil)
@@ -54,6 +54,7 @@ func (c *ClientConn) commit() (err error) {
 	c.status &= ^mysql.SERVER_STATUS_IN_TRANS
 
 	for _, co := range c.txConns {
+		/* 轮询事务涉及的后端连接，依次提交 */
 		if e := co.Commit(); e != nil {
 			err = e
 		}
@@ -68,6 +69,7 @@ func (c *ClientConn) commit() (err error) {
 func (c *ClientConn) rollback() (err error) {
 	c.status &= ^mysql.SERVER_STATUS_IN_TRANS
 
+	/* 轮询事务涉及的后端连接，依次回滚 */
 	for _, co := range c.txConns {
 		if e := co.Rollback(); e != nil {
 			err = e
