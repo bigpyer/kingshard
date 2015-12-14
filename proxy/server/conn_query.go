@@ -133,9 +133,9 @@ func (c *ClientConn) getBackendConn(n *backend.Node, fromSlave bool) (co *backen
 			return
 		}
 	} else {
-		/* 如果处于事务中 */
-		/* 为什么上锁? */
+		/* 如果处于事务中,后端连接已经确定 */
 		var ok bool
+		/* TODO 为什么上锁? */
 		c.Lock()
 		co, ok = c.txConns[n]
 		c.Unlock()
@@ -149,18 +149,19 @@ func (c *ClientConn) getBackendConn(n *backend.Node, fromSlave bool) (co *backen
 				return
 			}
 
+			/* 节点与后端连接map映射 */
 			c.Lock()
 			c.txConns[n] = co
 			c.Unlock()
 		}
 	}
 	//todo, set conn charset, etc...
-	/* 设置数据库? */
+	/* 设置后端连接数据库 */
 	if err = co.UseDB(c.db); err != nil {
 		return
 	}
 
-	/* TODO 使用默认字符集? */
+	/* 使用后端连接字符集 */
 	if err = co.SetCharset(c.charset); err != nil {
 		return
 	}
@@ -315,6 +316,7 @@ func (c *ClientConn) closeConn(conn *backend.BackendConn, rollback bool) {
 		conn.Rollback()
 	}
 
+	/* 回收连接 */
 	conn.Close()
 }
 
