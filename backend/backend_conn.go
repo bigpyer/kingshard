@@ -111,6 +111,7 @@ func (c *Conn) ReConnect() error {
 	}
 
 	//we must always use autocommit
+	/* 连接池中所有的连接默认autocommit=1 */
 	if !c.IsAutoCommit() {
 		if _, err := c.exec("set autocommit = 1"); err != nil {
 			c.conn.Close()
