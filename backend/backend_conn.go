@@ -49,9 +49,8 @@ type Conn struct {
 	charset   string
 	salt      []byte
 
-	lastPing int64
-
-	pkgErr error
+	pushTimestamp int64
+	pkgErr        error
 }
 
 func (c *Conn) Connect(addr string, user string, password string, db string) error {
@@ -120,8 +119,6 @@ func (c *Conn) ReConnect() error {
 		}
 	}
 
-	c.lastPing = time.Now().Unix()
-
 	return nil
 }
 
@@ -129,6 +126,8 @@ func (c *Conn) Close() error {
 	if c.conn != nil {
 		c.conn.Close()
 		c.conn = nil
+		c.salt = nil
+		c.pkgErr = nil
 	}
 
 	return nil
@@ -343,19 +342,13 @@ func (c *Conn) writeCommandStrStr(command byte, arg1 string, arg2 string) error 
 }
 
 func (c *Conn) Ping() error {
-	n := time.Now().UnixNano()
-
-	if n-c.lastPing >= pingPeriod {
-		if err := c.writeCommand(mysql.COM_PING); err != nil {
-			return err
-		}
-
-		if _, err := c.readOK(); err != nil {
-			return err
-		}
+	if err := c.writeCommand(mysql.COM_PING); err != nil {
+		return err
 	}
 
-	c.lastPing = n
+	if _, err := c.readOK(); err != nil {
+		return err
+	}
 
 	return nil
 }

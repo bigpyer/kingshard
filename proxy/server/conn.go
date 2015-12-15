@@ -223,6 +223,7 @@ func (c *ClientConn) readHandshakeResponse() error {
 
 	//user name
 	c.user = string(data[pos : pos+bytes.IndexByte(data[pos:], 0)])
+
 	pos += len(c.user) + 1
 
 	//auth length and auth
@@ -232,29 +233,34 @@ func (c *ClientConn) readHandshakeResponse() error {
 
 	/* ks配置中的ks密码非node中的密码 */
 	checkAuth := mysql.CalcPassword(c.salt, []byte(c.proxy.cfg.Password))
-	if !bytes.Equal(auth, checkAuth) {
+	if c.user != c.proxy.cfg.User || !bytes.Equal(auth, checkAuth) {
 		golog.Error("ClientConn", "readHandshakeResponse", "error", 0,
 			"auth", auth,
 			"checkAuth", checkAuth,
+			"client_user", c.user,
+			"config_set_user", c.proxy.cfg.User,
 			"passworld", c.proxy.cfg.Password)
-		return mysql.NewDefaultError(mysql.ER_ACCESS_DENIED_ERROR, c.c.RemoteAddr().String(), c.user, "Yes")
+		return mysql.NewDefaultError(mysql.ER_ACCESS_DENIED_ERROR, c.user, c.c.RemoteAddr().String(), "Yes")
 	}
 
 	pos += authLen
 
-	/* 是否有DB使用标识 */
+	var db string
 	if c.capability&mysql.CLIENT_CONNECT_WITH_DB > 0 {
 		if len(data[pos:]) == 0 {
 			return nil
 		}
 
-		db := string(data[pos : pos+bytes.IndexByte(data[pos:], 0)])
+		db = string(data[pos : pos+bytes.IndexByte(data[pos:], 0)])
 		pos += len(c.db) + 1
 
-		/* 有默认use db? */
-		if err := c.useDB(db); err != nil {
-			return err
-		}
+	} else {
+		//if connect without database, use default db
+		db = c.proxy.schema.db
+	}
+
+	if err := c.useDB(db); err != nil {
+		return err
 	}
 
 	return nil
