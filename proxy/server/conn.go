@@ -131,6 +131,7 @@ func (c *ClientConn) Close() error {
 		return nil
 	}
 
+	/* 关闭网络套接字 */
 	c.c.Close()
 
 	c.closed = true

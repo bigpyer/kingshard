@@ -381,7 +381,6 @@ func (c *ClientConn) GetTransExecNode(tokens []string, sql string) (*backend.Nod
 
 	/* 事务语句中不包含节点注释 */
 	if execNode == nil {
-		/* 根据普通注释获取节点名称 */
 		execNode, _, err = c.GetExecNode(tokens, sql)
 		if err != nil {
 			return nil, err
