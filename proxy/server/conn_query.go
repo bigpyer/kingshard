@@ -135,24 +135,24 @@ func (c *ClientConn) getBackendConn(n *backend.Node, fromSlave bool) (co *backen
 	} else {
 		/* 如果处于事务中,后端连接已经确定 */
 		var ok bool
-		/* TODO 为什么上锁? */
-		c.Lock()
 		co, ok = c.txConns[n]
-		c.Unlock()
 
 		if !ok {
 			if co, err = n.GetMasterConn(); err != nil {
 				return
 			}
 
-			if err = co.Begin(); err != nil {
-				return
+			if !c.isAutoCommit() {
+				if err = co.SetAutoCommit(0); err != nil {
+					return
+				}
+			} else {
+				if err = co.Begin(); err != nil {
+					return
+				}
 			}
 
-			/* 节点与后端连接map映射 */
-			c.Lock()
 			c.txConns[n] = co
-			c.Unlock()
 		}
 	}
 	//todo, set conn charset, etc...
@@ -460,7 +460,9 @@ func (c *ClientConn) GetExecNode(tokens []string,
 				if len(tokens) < 2 {
 					break
 				}
-				secondWord := strings.ToLower(tokens[1])
+				tmp1 := strings.Split(sql, "=")
+				tmp2 := strings.Split(tmp1[0], " ")
+				secondWord := strings.ToLower(tmp2[1])
 				if secondWord == mysql.TK_STR_NAMES ||
 					secondWord == mysql.TK_STR_RESULTS ||
 					secondWord == mysql.TK_STR_CLIENT ||
