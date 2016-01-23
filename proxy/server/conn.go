@@ -299,6 +299,7 @@ func (c *ClientConn) Run() {
 			c.writeError(err)
 		}
 
+		/* 如果客户端主动关闭连接，则释放客户端连接资源 */
 		if c.closed {
 			return
 		}

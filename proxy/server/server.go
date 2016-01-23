@@ -218,28 +218,27 @@ func (s *Server) newClientConn(co net.Conn) *ClientConn {
 
 	/* mysql通讯协议结构 */
 	c.pkg = mysql.NewPacketIO(tcpConn)
+	/* 每一个连接的服务结构体 */
 	c.proxy = s
-
+	/* 命令序列号 */
 	c.pkg.Sequence = 0
-
+	/* 连接标识ID */
 	c.connectionId = atomic.AddUint32(&baseConnId, 1)
-
+	/* 每一个连接的状态，标识是否处在事物中 */
 	c.status = mysql.SERVER_STATUS_AUTOCOMMIT
-
 	/* 根据时间生成随机盐 */
 	c.salt, _ = mysql.RandomBuf(20)
-
-	/* node为key，连接为value */
+	/* node结构指针为key，后端连接结构指针为value */
 	c.txConns = make(map[*backend.Node]*backend.BackendConn)
-
+	/* 连接是否关闭 */
 	c.closed = false
-
 	/* 校对值 */
 	c.collation = mysql.DEFAULT_COLLATION_ID
+	/* 连接编码 */
 	c.charset = mysql.DEFAULT_CHARSET
-
-	/* 预编译 */
+	/* 预编译ID */
 	c.stmtId = 0
+	/* 预编译语句结构体 */
 	c.stmts = make(map[uint32]*Stmt)
 
 	return c
@@ -303,7 +302,7 @@ func (s *Server) Run() error {
 			continue
 		}
 
-		/* 每个请求用单独的goroutine处理 */
+		/* accept每个请求后用单独的goroutine处理请求 */
 		go s.onConn(conn)
 	}
 
