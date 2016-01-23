@@ -39,10 +39,12 @@ type Node struct {
 	sync.RWMutex
 	Master *DB
 
+	/* 从实例数组 */
 	Slave          []*DB
 	LastSlaveIndex int
-	RoundRobinQ    []int
-	SlaveWeights   []int
+	/* rr列表 */
+	RoundRobinQ  []int
+	SlaveWeights []int
 
 	DownAfterNoAlive time.Duration
 
@@ -64,6 +66,7 @@ func (n *Node) CheckNode() {
 	for {
 		n.checkMaster()
 		n.checkSlave()
+		/* 每间隔16秒检查一次 */
 		time.Sleep(16 * time.Second)
 	}
 }
@@ -132,6 +135,7 @@ func (n *Node) checkMaster() {
 }
 
 func (n *Node) checkSlave() {
+	/* TODO 为什么加读锁? */
 	n.RLock()
 	if n.Slave == nil {
 		n.RUnlock()
@@ -224,6 +228,7 @@ func (n *Node) DeleteSlave(addr string) error {
 }
 
 func (n *Node) OpenDB(addr string) (*DB, error) {
+	/* 初始DB为空 */
 	db, err := Open(addr, n.Cfg.User, n.Cfg.Password, "", n.Cfg.MaxConnNum)
 	return db, err
 }
@@ -324,14 +329,18 @@ func (n *Node) ParseSlave(slaveStr string) error {
 	if len(slaveStr) == 0 {
 		return nil
 	}
+	/* 去除头尾的SlaveSplit字符串 */
 	slaveStr = strings.Trim(slaveStr, SlaveSplit)
 	slaveArray := strings.Split(slaveStr, SlaveSplit)
 	count := len(slaveArray)
+	/* 从库数组 */
 	n.Slave = make([]*DB, 0, count)
+	/* 从库权重数组 */
 	n.SlaveWeights = make([]int, 0, count)
 
 	//parse addr and weight
 	for i := 0; i < count; i++ {
+		/* 分割addr和权重 */
 		addrAndWeight := strings.Split(slaveArray[i], WeightSplit)
 		if len(addrAndWeight) == 2 {
 			weight, err = strconv.Atoi(addrAndWeight[1])
@@ -339,14 +348,17 @@ func (n *Node) ParseSlave(slaveStr string) error {
 				return err
 			}
 		} else {
+			/* 如果没有权重，默认为1 */
 			weight = 1
 		}
 		n.SlaveWeights = append(n.SlaveWeights, weight)
+		/* 根据addr信息建立从库缓存和空闲连接池 */
 		if db, err = n.OpenDB(addrAndWeight[0]); err != nil {
 			return err
 		}
 		n.Slave = append(n.Slave, db)
 	}
+	/* 初始化slave权重轮询负载均衡机制 */
 	n.InitBalancer()
 	return nil
 }

@@ -76,12 +76,14 @@ func (c *ClientConn) handleNodeCmd(rows sqlparser.InsertRows) error {
 	addr = strings.Trim(addr, "'")
 
 	switch strings.ToLower(opt) {
+	/* 增加节点 */
 	case ADMIN_OPT_ADD:
 		err = c.AddDatabase(
 			nodeName,
 			role,
 			addr,
 		)
+	/* 删除节点 */
 	case ADMIN_OPT_DEL:
 		err = c.DeleteDatabase(
 			nodeName,
@@ -89,12 +91,14 @@ func (c *ClientConn) handleNodeCmd(rows sqlparser.InsertRows) error {
 			addr,
 		)
 
+		/* 上线节点 */
 	case ADMIN_OPT_UP:
 		err = c.UpDatabase(
 			nodeName,
 			role,
 			addr,
 		)
+		/* 下线节点 */
 	case ADMIN_OPT_DOWN:
 		err = c.DownDatabase(
 			nodeName,
@@ -215,8 +219,10 @@ func (c *ClientConn) handleAdmin(admin *sqlparser.Admin) error {
 	var err error
 	var result *mysql.Resultset
 
+	/* 初始化结构体 */
 	region := sqlparser.String(admin.Region)
 
+	/* 节点命令顺序 */
 	err = c.checkCmdOrder(region, admin.Columns)
 	if err != nil {
 		return err

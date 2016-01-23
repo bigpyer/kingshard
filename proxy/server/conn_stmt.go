@@ -97,6 +97,7 @@ func (c *ClientConn) handleStmtPrepare(sql string) error {
 	s.id = c.stmtId
 	c.stmtId++
 
+	/* 应答prepare结果 */
 	if err = c.writePrepare(s); err != nil {
 		return err
 	}
@@ -236,6 +237,7 @@ func (c *ClientConn) handleStmtExecute(data []byte) error {
 	var err error
 
 	switch stmt := s.s.(type) {
+	/* 根据prepare语句中的处理类型，分别进行处理 */
 	case *sqlparser.Select:
 		err = c.handlePrepareSelect(stmt, s.sql, s.args)
 	case *sqlparser.Insert:

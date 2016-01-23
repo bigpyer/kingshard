@@ -48,45 +48,62 @@ func (c *ClientConn) handleQuery(sql string) (err error) {
 			return
 		}
 	}()
+	/* 删除sql语句最后的分号 */
+	sql = strings.TrimRight(sql, ";")
 
-	sql = strings.TrimRight(sql, ";") //删除sql语句最后的分号
+	/* 不需要分表 */
 	hasHandled, err := c.preHandleShard(sql)
 	if err != nil {
 		golog.Error("server", "preHandleShard", err.Error(), 0, "hasHandled", hasHandled)
 		return err
 	}
+	/* 如果是不需要分表且已经处理完成，不再执行下面的动作 */
 	if hasHandled {
 		return nil
 	}
 
 	var stmt sqlparser.Statement
-	stmt, err = sqlparser.Parse(sql) //解析sql语句,得到的stmt是一个interface
+
+	/* 需要分表或是自定义sql语句，则需要我们自行解析sql语句 */
+	stmt, err = sqlparser.Parse(sql)
 	if err != nil {
 		golog.Error("server", "parse", err.Error(), 0, "hasHandled", hasHandled, "sql", sql)
 		return err
 	}
 
+	/* 类型查询 */
 	switch v := stmt.(type) {
+	/* 处理SELECT */
 	case *sqlparser.Select:
 		return c.handleSelect(v, nil)
+	/* 处理INSERT */
 	case *sqlparser.Insert:
 		return c.handleExec(stmt, nil)
+	/* 处理UPDATE */
 	case *sqlparser.Update:
 		return c.handleExec(stmt, nil)
+	/* 处理DELETE */
 	case *sqlparser.Delete:
 		return c.handleExec(stmt, nil)
+	/* 处理REPLACE语句非函数 */
 	case *sqlparser.Replace:
 		return c.handleExec(stmt, nil)
+	/* 处理SET语句 */
 	case *sqlparser.Set:
 		return c.handleSet(v, sql)
+	/* 处理BEGIN语句 */
 	case *sqlparser.Begin:
 		return c.handleBegin()
+	/* 处理COMMIT语句 */
 	case *sqlparser.Commit:
 		return c.handleCommit()
+	/* 处理ROLLBACK语句 */
 	case *sqlparser.Rollback:
 		return c.handleRollback()
+	/* 处理管理语句 */
 	case *sqlparser.Admin:
 		return c.handleAdmin(v)
+	/* 处理USE DB语句 */
 	case *sqlparser.UseDB:
 		return c.handleUseDB(v)
 	default:
@@ -96,14 +113,19 @@ func (c *ClientConn) handleQuery(sql string) (err error) {
 	return nil
 }
 
+/* 获取连接的时候设置DB、编码等 */
 func (c *ClientConn) getBackendConn(n *backend.Node, fromSlave bool) (co *backend.BackendConn, err error) {
+	/* 如果没有处于事务中 */
 	if !c.isInTransaction() {
+		/* 如果从库标识为真 */
 		if fromSlave {
+			/* 根据round robin获取一个从实例连接 */
 			co, err = n.GetSlaveConn()
 			if err != nil {
 				co, err = n.GetMasterConn()
 			}
 		} else {
+			/* 默认使用主实例 */
 			co, err = n.GetMasterConn()
 		}
 		if err != nil {
@@ -111,6 +133,7 @@ func (c *ClientConn) getBackendConn(n *backend.Node, fromSlave bool) (co *backen
 			return
 		}
 	} else {
+		/* 如果处于事务中,后端连接已经确定 */
 		var ok bool
 		co, ok = c.txConns[n]
 
@@ -132,11 +155,13 @@ func (c *ClientConn) getBackendConn(n *backend.Node, fromSlave bool) (co *backen
 			c.txConns[n] = co
 		}
 	}
-
+	//todo, set conn charset, etc...
+	/* 设置后端连接数据库 */
 	if err = co.UseDB(c.db); err != nil {
 		return
 	}
 
+	/* 使用后端连接字符集 */
 	if err = co.SetCharset(c.charset); err != nil {
 		return
 	}
@@ -182,6 +207,8 @@ func (c *ClientConn) getShardConns(fromSlave bool, plan *router.Plan) (map[strin
 
 func (c *ClientConn) executeInNode(conn *backend.BackendConn, sql string, args []interface{}) ([]*mysql.Result, error) {
 	var state string
+
+	/* TODO 根据mysql通讯协议，向后端传输并执行sql语句 */
 	startTime := time.Now().UnixNano()
 	r, err := conn.Execute(sql, args...)
 	if err != nil {
@@ -289,6 +316,7 @@ func (c *ClientConn) closeConn(conn *backend.BackendConn, rollback bool) {
 		conn.Rollback()
 	}
 
+	/* 回收连接 */
 	conn.Close()
 }
 
@@ -330,6 +358,217 @@ func (c *ClientConn) newEmptyResultset(stmt *sqlparser.Select) *mysql.Resultset 
 	r.RowDatas = make([]mysql.RowData, 0)
 
 	return r
+}
+
+/* 事务型语句获取节点(事务不会垮节点，也不会有主从?) */
+func (c *ClientConn) GetTransExecNode(tokens []string, sql string) (*backend.Node, error) {
+	var execNode *backend.Node
+	var err error
+
+	/* 根据事务语句的节点注释获取node名称 */
+	tokensLen := len(tokens)
+	if 2 <= tokensLen {
+		/* 如果存在注释 */
+		if tokens[0][0] == mysql.COMMENT_PREFIX {
+			nodeName := strings.Trim(tokens[0], mysql.COMMENT_STRING)
+			/* 校验传输的node在schema中nodes里是否有配置 */
+			if c.schema.nodes[nodeName] != nil {
+				execNode = c.schema.nodes[nodeName]
+			}
+		}
+	}
+
+	/* 事务语句中不包含节点注释 */
+	if execNode == nil {
+		execNode, _, err = c.GetExecNode(tokens, sql)
+		if err != nil {
+			return nil, err
+		}
+		return execNode, nil
+	}
+	if len(c.txConns) == 1 && c.txConns[execNode] == nil {
+		return nil, errors.ErrTransInMulti
+	}
+	return execNode, nil
+}
+
+/* TODO 这个跟事务型获取node有什么区别呢?根据普通注释获取节点名称，如果语句中没有节点信息，则使用默认节点。 */
+func (c *ClientConn) GetExecNode(tokens []string,
+	sql string) (*backend.Node, bool, error) {
+	var execNode *backend.Node
+	var fromSlave bool
+
+	schema := c.proxy.schema
+	rules := schema.rule.Rules
+
+	tokensLen := len(tokens)
+	if 0 < tokensLen {
+		tokenId, ok := mysql.PARSE_TOKEN_MAP[strings.ToLower(tokens[0])]
+		if ok == true {
+			switch tokenId {
+			case mysql.TK_ID_SELECT, mysql.TK_ID_DELETE:
+				if len(rules) == 0 {
+					if tokenId == mysql.TK_ID_SELECT {
+						fromSlave = true
+					}
+					break
+				}
+				for i := 1; i < tokensLen; i++ {
+					if strings.ToLower(tokens[i]) == mysql.TK_STR_FROM {
+						if i+1 < tokensLen {
+							tableName := sqlparser.GetTableName(tokens[i+1])
+
+							/* 如果表名称在配置文件中，需要分表，则节点为空,fromSlave为false */
+							if _, ok := rules[tableName]; ok {
+								return nil, false, nil
+							} else {
+								if tokenId == mysql.TK_ID_SELECT {
+									fromSlave = true
+								}
+							}
+						}
+					}
+				}
+			case mysql.TK_ID_INSERT, mysql.TK_ID_REPLACE:
+				if len(rules) == 0 {
+					break
+				}
+				for i := 0; i < tokensLen; i++ {
+					if strings.ToLower(tokens[i]) == mysql.TK_STR_INTO {
+						if i+1 < tokensLen {
+							tableName := sqlparser.GetInsertTableName(tokens[i+1])
+							if _, ok := rules[tableName]; ok {
+								return nil, false, nil
+							}
+						}
+					}
+				}
+			case mysql.TK_ID_UPDATE:
+				if len(rules) == 0 {
+					break
+				}
+				for i := 0; i < tokensLen; i++ {
+					if strings.ToLower(tokens[i]) == mysql.TK_STR_SET {
+						tableName := sqlparser.GetTableName(tokens[i-1])
+						if _, ok := rules[tableName]; ok {
+							return nil, false, nil
+						}
+					}
+				}
+			case mysql.TK_ID_SET:
+				if len(tokens) < 2 {
+					break
+				}
+				tmp1 := strings.Split(sql, "=")
+				tmp2 := strings.Split(tmp1[0], " ")
+				secondWord := strings.ToLower(tmp2[1])
+				if secondWord == mysql.TK_STR_NAMES ||
+					secondWord == mysql.TK_STR_RESULTS ||
+					secondWord == mysql.TK_STR_CLIENT ||
+					secondWord == mysql.TK_STR_CONNECTION ||
+					secondWord == mysql.TK_STR_AUTOCOMMIT {
+					return nil, false, nil
+				}
+			default:
+				return nil, false, nil
+			}
+		}
+	}
+	//get node
+	if 2 <= tokensLen {
+		if tokens[0][0] == mysql.COMMENT_PREFIX {
+			nodeName := strings.Trim(tokens[0], mysql.COMMENT_STRING)
+			if c.schema.nodes[nodeName] != nil {
+				execNode = c.schema.nodes[nodeName]
+			}
+			//select
+			if mysql.PARSE_TOKEN_MAP[tokens[1]] == mysql.TK_ID_SELECT {
+				fromSlave = true
+			}
+		}
+	}
+
+	/* 如果语句中没有指定node，或者node不存在，采用默认node */
+	if execNode == nil {
+		defaultRule := c.schema.rule.DefaultRule
+		if len(defaultRule.Nodes) == 0 {
+			return nil, false, errors.ErrNoDefaultNode
+		}
+		execNode = c.proxy.GetNode(defaultRule.Nodes[0])
+	}
+
+	return execNode, fromSlave, nil
+}
+
+//返回true表示sql已经处理，false表示sql未处理
+func (c *ClientConn) preHandleShard(sql string) (bool, error) {
+	var rs []*mysql.Result
+	var err error
+
+	var execNode *backend.Node
+	var fromSlave bool = false
+
+	if len(sql) == 0 {
+		return false, errors.ErrCmdUnsupport
+	}
+
+	tokens := strings.Fields(sql)
+	if len(tokens) == 0 {
+		return false, errors.ErrCmdUnsupport
+	}
+
+	/* 判断是否在事务中 */
+	if c.isInTransaction() {
+		execNode, err = c.GetTransExecNode(tokens, sql)
+	} else {
+		/* 如果不是在事务中，需要判断主从 */
+		fmt.Println("not in txn")
+		execNode, fromSlave, err = c.GetExecNode(tokens, sql)
+		fmt.Println(fromSlave)
+	}
+
+	if err != nil {
+		return false, err
+	}
+	//need shard sql
+	/* 需要跨区执行sql，则返回false，nil，自己实现解析器，解析sql进行处理 */
+	if execNode == nil {
+		return false, nil
+	}
+
+	// TODO execute in Master DB?
+	/* 根据上一步获取的node、fromSlave标识，从连接池中获取连接 */
+	//execute in Master DB
+	conn, err := c.getBackendConn(execNode, fromSlave)
+	defer c.closeConn(conn, false)
+	if err != nil {
+		return false, err
+	}
+
+	/* 向连接句柄透传并执行sql语句 */
+	rs, err = c.executeInNode(conn, sql, nil)
+	if err != nil {
+		return false, err
+	}
+
+	if len(rs) == 0 {
+		msg := fmt.Sprintf("result is empty")
+		golog.Error("ClientConn", "handleUnsupport", msg, c.connectionId)
+		return false, mysql.NewError(mysql.ER_UNKNOWN_ERROR, msg)
+	}
+
+	if rs[0].Resultset != nil {
+		/* 获得后端实例应答结果并根据mysql通讯协议，组装应答报文 */
+		err = c.writeResultset(c.status, rs[0].Resultset)
+	} else {
+		err = c.writeOK(rs[0])
+	}
+
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
 
 func (c *ClientConn) handleExec(stmt sqlparser.Statement, args []interface{}) error {

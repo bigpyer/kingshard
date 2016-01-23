@@ -52,6 +52,7 @@ func ParseNumSharding(Locations []int, TableRowLimit int) ([]NumKeyRange, error)
 
 	ranges := make([]NumKeyRange, tableCount)
 	for i := 0; i < tableCount; i++ {
+		/* 计算表分区范围 */
 		ranges[i].Start = int64(i * TableRowLimit)
 		ranges[i].End = int64((i + 1) * TableRowLimit)
 	}

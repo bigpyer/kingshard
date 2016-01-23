@@ -21,10 +21,12 @@ import (
 	"github.com/flike/kingshard/core/errors"
 )
 
+/* 更相减损法求最大公约数 */
 func Gcd(ary []int) int {
 	var i int
 	min := ary[0]
 	length := len(ary)
+	/* 求最小值 */
 	for i = 0; i < length; i++ {
 		if ary[i] < min {
 			min = ary[i]
@@ -32,6 +34,7 @@ func Gcd(ary []int) int {
 	}
 
 	for {
+		/* 是否求得公约数 */
 		isCommon := true
 		for i = 0; i < length; i++ {
 			if ary[i]%min != 0 {
@@ -53,12 +56,16 @@ func Gcd(ary []int) int {
 func (n *Node) InitBalancer() {
 	var sum int
 	n.LastSlaveIndex = 0
+	/* 获得最大公约数 */
 	gcd := Gcd(n.SlaveWeights)
 
+	/* 以最大公约数为步进，获取rrq元素总数 */
 	for _, weight := range n.SlaveWeights {
 		sum += weight / gcd
 	}
 
+	/* 根据rrq元素总数，分配节点下标作为rrq的值，生成rrq队列 */
+	/* 这里的index和slave数组中的index一一对应 */
 	n.RoundRobinQ = make([]int, 0, sum)
 	for index, weight := range n.SlaveWeights {
 		for j := 0; j < weight/gcd; j++ {
@@ -67,9 +74,11 @@ func (n *Node) InitBalancer() {
 	}
 
 	//random order
+	/* TODO 对rrq无规律随机排序一遍 */
 	if 1 < len(n.SlaveWeights) {
 		r := rand.New(rand.NewSource(time.Now().UnixNano()))
 		for i := 0; i < sum; i++ {
+			/* 返回[0,n)的一个随机数 */
 			x := r.Intn(sum)
 			temp := n.RoundRobinQ[x]
 			other := sum % (x + 1)
@@ -97,6 +106,9 @@ func (n *Node) GetNextSlave() (*DB, error) {
 	}
 	db := n.Slave[index]
 	n.LastSlaveIndex++
-	n.LastSlaveIndex = n.LastSlaveIndex % queueLen
+	/* 到达rrq末尾后，将下标置为0，即rrq队列头，从rrq头开始轮训 */
+	if queueLen <= n.LastSlaveIndex {
+		n.LastSlaveIndex = 0
+	}
 	return db, nil
 }

@@ -51,7 +51,9 @@ type Server struct {
 	schema *Schema
 
 	listener net.Listener
-	running  bool
+
+	/* 运行标示 */
+	running bool
 }
 
 func (s *Server) parseAllowIps() error {
@@ -60,6 +62,7 @@ func (s *Server) parseAllowIps() error {
 		return nil
 	}
 	ipVec := strings.Split(cfg.AllowIps, ",")
+	/* 使用切片的方式 */
 	s.allowips = make([]net.IP, 0, 10)
 	for _, ip := range ipVec {
 		s.allowips = append(s.allowips, net.ParseIP(strings.TrimSpace(ip)))
@@ -67,21 +70,28 @@ func (s *Server) parseAllowIps() error {
 	return nil
 }
 
+/* 解析node节点，建立ks与node节点内主从实例的连接池 */
 func (s *Server) parseNode(cfg config.NodeConfig) (*backend.Node, error) {
 	var err error
 	n := new(backend.Node)
+	/* 节点配置 */
 	n.Cfg = cfg
 
+	/* 标记节点下线的间隔时间 */
 	n.DownAfterNoAlive = time.Duration(cfg.DownAfterNoAlive) * time.Second
+	/* 建立node节点内ks与主实例连接池并初始化DB状态为Unknown */
 	err = n.ParseMaster(cfg.Master)
 	if err != nil {
 		return nil, err
 	}
+
+	/* TODO 建立ks与从实例连接池,初始化round robin队列 */
 	err = n.ParseSlave(cfg.Slave)
 	if err != nil {
 		return nil, err
 	}
 
+	/* 一个node对应一个goroutine进行节点内多实例存活检测 */
 	go n.CheckNode()
 
 	return n, nil
@@ -89,18 +99,22 @@ func (s *Server) parseNode(cfg config.NodeConfig) (*backend.Node, error) {
 
 func (s *Server) parseNodes() error {
 	cfg := s.cfg
+	/* 以nodes数组初始化node字典,字典的key为node中的name */
 	s.nodes = make(map[string]*backend.Node, len(cfg.Nodes))
 
 	for _, v := range cfg.Nodes {
+		/* 不允许有同名node */
 		if _, ok := s.nodes[v.Name]; ok {
 			return fmt.Errorf("duplicate node [%s].", v.Name)
 		}
 
+		/* 解析节点集内的节点，建立ks与节点内实例的连接池，建立节点保活goroutine */
 		n, err := s.parseNode(v)
 		if err != nil {
 			return err
 		}
 
+		/* node字典赋值 */
 		s.nodes[v.Name] = n
 	}
 
@@ -115,14 +129,17 @@ func (s *Server) parseSchema() error {
 
 	nodes := make(map[string]*backend.Node)
 	for _, n := range schemaCfg.Nodes {
+		/* 检查节点是否存在 */
 		if s.GetNode(n) == nil {
 			return fmt.Errorf("schema [%s] node [%s] config is not exists.", schemaCfg.DB, n)
 		}
 
+		/* 检查node数组里面是否存在该节点 */
 		if _, ok := nodes[n]; ok {
 			return fmt.Errorf("schema [%s] node [%s] duplicate.", schemaCfg.DB, n)
 		}
 
+		/* 节点集map赋值 */
 		nodes[n] = s.GetNode(n)
 	}
 
@@ -136,12 +153,14 @@ func (s *Server) parseSchema() error {
 		nodes: nodes,
 		rule:  rule,
 	}
+	/* TODO server端db的作用? */
 	s.db = schemaCfg.DB
 
 	return nil
 }
 
 func NewServer(cfg *config.Config) (*Server, error) {
+	/* new关键字返回指针 */
 	s := new(Server)
 
 	s.cfg = cfg
@@ -150,14 +169,17 @@ func NewServer(cfg *config.Config) (*Server, error) {
 	s.user = cfg.User
 	s.password = cfg.Password
 
+	/* 加载ip白名单 */
 	if err := s.parseAllowIps(); err != nil {
 		return nil, err
 	}
 
+	/* 解析节点信息,建立ks与后端实例的连接池,此处不需要指定DB */
 	if err := s.parseNodes(); err != nil {
 		return nil, err
 	}
 
+	/* 加载分表规则 */
 	if err := s.parseSchema(); err != nil {
 		return nil, err
 	}
@@ -178,6 +200,7 @@ func NewServer(cfg *config.Config) (*Server, error) {
 		s.addr)
 	return s, nil
 }
+
 func (s *Server) newClientConn(co net.Conn) *ClientConn {
 	c := new(ClientConn)
 	tcpConn := co.(*net.TCPConn)
@@ -190,8 +213,10 @@ func (s *Server) newClientConn(co net.Conn) *ClientConn {
 	tcpConn.SetNoDelay(false)
 	c.c = tcpConn
 
+	/* 将服务端schema赋值给客户端,为分表做准备 */
 	c.schema = s.GetSchema()
 
+	/* mysql通讯协议结构 */
 	c.pkg = mysql.NewPacketIO(tcpConn)
 	c.proxy = s
 
@@ -201,15 +226,19 @@ func (s *Server) newClientConn(co net.Conn) *ClientConn {
 
 	c.status = mysql.SERVER_STATUS_AUTOCOMMIT
 
+	/* 根据时间生成随机盐 */
 	c.salt, _ = mysql.RandomBuf(20)
 
+	/* node为key，连接为value */
 	c.txConns = make(map[*backend.Node]*backend.BackendConn)
 
 	c.closed = false
 
+	/* 校对值 */
 	c.collation = mysql.DEFAULT_COLLATION_ID
 	c.charset = mysql.DEFAULT_CHARSET
 
+	/* 预编译 */
 	c.stmtId = 0
 	c.stmts = make(map[uint32]*Stmt)
 
@@ -217,6 +246,7 @@ func (s *Server) newClientConn(co net.Conn) *ClientConn {
 }
 
 func (s *Server) onConn(c net.Conn) {
+	/* TODO 调用newClientConn需不需要加锁新建客户端连接句柄并赋值附加信息 */
 	conn := s.newClientConn(c) //新建一个conn
 
 	defer func() {
@@ -234,12 +264,24 @@ func (s *Server) onConn(c net.Conn) {
 		conn.Close()
 	}()
 
+	/* 判断ip是否在白名单中 */
 	if allowConnect := conn.IsAllowConnect(); allowConnect == false {
 		err := mysql.NewError(mysql.ER_ACCESS_DENIED_ERROR, "ip address access denied by kingshard.")
 		conn.writeError(err)
 		conn.Close()
 		return
 	}
+
+	/* 握手认证阶段*/
+	// 服务器 -> 客户端：握手初始化消息
+	// 客户端 -> 服务器：登陆认证消息
+	// 服务器 -> 客户端：认证结果消息
+
+	/* 命令执行阶段 */
+	//客户端 -> 服务器：执行命令消息
+	// 服务器 -> 客户端：命令执行结果
+
+	/* mysql握手协议,先要求应用端上送用户名、密码然后校验ks用户名、密码并返回校验结果，握手成功，执行后续命令 */
 	if err := conn.Handshake(); err != nil {
 		golog.Error("server", "onConn", err.Error(), 0)
 		c.Close()
@@ -252,13 +294,16 @@ func (s *Server) onConn(c net.Conn) {
 func (s *Server) Run() error {
 	s.running = true
 
+	/* 没有收到退出信号时 */
 	for s.running {
+		/* 主进程监听端口，接收请求 */
 		conn, err := s.listener.Accept()
 		if err != nil {
 			golog.Error("server", "Run", err.Error(), 0)
 			continue
 		}
 
+		/* 每个请求用单独的goroutine处理 */
 		go s.onConn(conn)
 	}
 
