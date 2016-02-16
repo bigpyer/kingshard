@@ -36,8 +36,13 @@ log_sql : on
 slow_log_time : 100
 #日志文件路径，如果不配置则会输出到终端。
 log_path : /Users/flike/log
+# sql黑名单文件路径
+# 所有在该文件中的sql都会被kingshard拒绝转发
+#blacklist_sql_file: /Users/flike/blacklist
 # 只允许下面的IP列表连接kingshard，如果不配置则对连接kingshard的IP不做限制。
 allow_ips: 127.0.0.1
+# kingshard使用的字符集，如果不设置该选项，则kingshard使用utf8作为默认字符集
+#proxy_charset: utf8mb4
 
 # 一个node节点表示mysql集群的一个数据分片，包括一主多从（可以不配置从库）
 nodes :
@@ -320,7 +325,7 @@ mysql> select/*master*/ * from kingshard_test_conn;
 ```
 
 ### 3.4. 跨node的sum和count函数
-在kingshard中，支持sum和count函数，kingshard会将相应的SQL发生到正确的DB，并将结果合并起来再返回给客户的。例如：
+在kingshard中，支持sum和count函数，kingshard会将相应的SQL发送到正确的DB，并将结果合并起来再返回给客户的。例如：
 
 ```
 mysql> select count(id) from test_shard_hash where id > 1;
@@ -415,10 +420,12 @@ ERROR 1105 (HY000): transaction in multi node
 ```
 
 ## 6. kingshard的管理端操作
-kingshard的管理接口，目前还是命令行的方式。后续有时间打算将其改成web方式。管理端具体的命令可以参考[文档](./doc/KingDoc/admin_command_introduce.md)。管理端的命令格式，可以分为两类：
+kingshard的管理接口，目前还是命令行的方式。后续有时间打算将其改成web方式。管理端具体的命令可以参考[文档](./admin_command_introduce.md)。管理端的命令格式，可以分为两类：
 
 * ` admin server(opt,k,v) values(action,k1,v1)`。这种命令是操作整个kingshard的，其中opt表示这个操作的动作；k表示操作的对象，v表示给对象的赋值。
 * `admin node(opt,node,k,v) values(action,nodeName,k1,v1)`,这类命令表示操作node。其中opt表示这个操作的动作；node表示操作哪个node；k表示操作的对象，v表示给对象的赋值。
 
 ## 7. 总结
 kingshard开源两个月以来，得到了很多开发者的关注。这足以证明，大家对数据库中间件是有需求的，希望出现一款简单好用的MySQL Proxy。kingshard经过这两个月的迭代开发，也比较稳定了。据了解，有几个公司正在对其进行尝试。后续作者的主要精力会放在优化kingshard的性能上，同时完善kingshard已有的功能。如果大家对kingshard有什么想法或建议，可以发邮件联系我（flikecn#126.com)，非常乐意和大家交流。
+
+

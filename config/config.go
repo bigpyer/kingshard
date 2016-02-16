@@ -1,4 +1,4 @@
-// Copyright 2015 The kingshard Authors. All rights reserved.
+// Copyright 2016 The kingshard Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License"): you may
 // not use this file except in compliance with the License. You may obtain
@@ -30,6 +30,8 @@ type Config struct {
 	LogSql      string       `yaml:"log_sql"`
 	SlowLogTime int          `yaml:"slow_log_time"`
 	AllowIps    string       `yaml:"allow_ips"`
+	BlsFile     string       `yaml:"blacklist_sql_file"`
+	Charset     string       `yaml:"proxy_charset"`
 	Nodes       []NodeConfig `yaml:"nodes"`
 
 	Schema SchemaConfig `yaml:"schema"`

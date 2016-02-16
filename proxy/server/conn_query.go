@@ -1,4 +1,4 @@
-// Copyright 2015 The kingshard Authors. All rights reserved.
+// Copyright 2016 The kingshard Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License"): you may
 // not use this file except in compliance with the License. You may obtain
@@ -219,6 +219,7 @@ func (c *ClientConn) executeInNode(conn *backend.BackendConn, sql string, args [
 	execTime := float64(time.Now().UnixNano()-startTime) / float64(time.Millisecond)
 	if strings.ToLower(c.proxy.cfg.LogSql) != golog.LogSqlOff &&
 		execTime > float64(c.proxy.cfg.SlowLogTime) {
+		c.proxy.counter.IncrSlowLogTotal()
 		golog.OutputSql(state, "%.1fms - %s->%s:%s",
 			execTime,
 			c.c.RemoteAddr(),
@@ -273,6 +274,7 @@ func (c *ClientConn) executeInMultiNodes(conns map[string]*backend.BackendConn, 
 			execTime := float64(time.Now().UnixNano()-startTime) / float64(time.Millisecond)
 			if c.proxy.cfg.LogSql != golog.LogSqlOff &&
 				execTime > float64(c.proxy.cfg.SlowLogTime) {
+				c.proxy.counter.IncrSlowLogTotal()
 				golog.OutputSql(state, "%.1fms - %s->%s:%s",
 					execTime,
 					c.c.RemoteAddr(),

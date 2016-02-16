@@ -1,4 +1,4 @@
-// Copyright 2015 The kingshard Authors. All rights reserved.
+// Copyright 2016 The kingshard Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License"): you may
 // not use this file except in compliance with the License. You may obtain
@@ -76,7 +76,7 @@ func Open(addr string, user string, password string, dbName string, maxConnNum i
 	db.checkConn, err = db.newConn()
 	if err != nil {
 		db.Close()
-		return nil, errors.ErrDatabaseClose
+		return nil, err
 	}
 
 	/* TODO 空闲连接channel,当cacheConns耗尽时使用idleConns中的连接 为什么是放入channel */
@@ -91,7 +91,7 @@ func Open(addr string, user string, password string, dbName string, maxConnNum i
 			conn, err := db.newConn()
 			if err != nil {
 				db.Close()
-				return nil, errors.ErrDatabaseClose
+				return nil, err
 			}
 			conn.pushTimestamp = time.Now().Unix()
 			db.cacheConns <- conn

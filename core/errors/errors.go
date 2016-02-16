@@ -1,4 +1,4 @@
-// Copyright 2015 The kingshard Authors. All rights reserved.
+// Copyright 2016 The kingshard Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License"): you may
 // not use this file except in compliance with the License. You may obtain
@@ -34,6 +34,7 @@ var (
 
 	ErrAddressNull     = errors.New("address is nil")
 	ErrInvalidArgument = errors.New("argument is invalid")
+	ErrInvalidCharset  = errors.New("charset is invalid")
 	ErrCmdUnsupport    = errors.New("command unsupport")
 
 	ErrLocationsCount = errors.New("locations count are not equal")

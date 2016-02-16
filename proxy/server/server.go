@@ -1,4 +1,4 @@
-// Copyright 2015 The kingshard Authors. All rights reserved.
+// Copyright 2016 The kingshard Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License"): you may
 // not use this file except in compliance with the License. You may obtain
@@ -15,8 +15,11 @@
 package server
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"net"
+	"os"
 	"runtime"
 	"strings"
 	"sync/atomic"
@@ -26,6 +29,7 @@ import (
 
 	"github.com/flike/kingshard/backend"
 	"github.com/flike/kingshard/config"
+	"github.com/flike/kingshard/core/errors"
 	"github.com/flike/kingshard/core/golog"
 	"github.com/flike/kingshard/proxy/router"
 )
@@ -38,17 +42,25 @@ type Schema struct {
 	rule *router.Router
 }
 
+type BlacklistSqls struct {
+	sqls    map[string]string
+	sqlsLen int
+}
+
 type Server struct {
-	cfg *config.Config
+	cfg       *config.Config
+	addr      string
+	user      string
+	password  string
+	db        string
+	charset   string
+	collation mysql.CollationId
 
-	addr     string
-	user     string
-	password string
-	db       string
-	allowips []net.IP
-
-	nodes  map[string]*backend.Node
-	schema *Schema
+	blacklistSqls *BlacklistSqls
+	allowips      []net.IP
+	counter       *Counter
+	nodes         map[string]*backend.Node
+	schema        *Schema
 
 	listener net.Listener
 
@@ -70,7 +82,41 @@ func (s *Server) parseAllowIps() error {
 	return nil
 }
 
-/* 解析node节点，建立ks与node节点内主从实例的连接池 */
+//parse the blacklist sql file
+func (s *Server) parseBlackListSqls() error {
+	bs := new(BlacklistSqls)
+	bs.sqls = make(map[string]string)
+	if len(s.cfg.BlsFile) != 0 {
+		file, err := os.Open(s.cfg.BlsFile)
+		if err != nil {
+			return err
+		}
+
+		defer file.Close()
+		rd := bufio.NewReader(file)
+		for {
+			line, err := rd.ReadString('\n')
+			//end of file
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return err
+			}
+			line = strings.TrimSpace(line)
+			if len(line) != 0 {
+				fingerPrint := mysql.GetFingerprint(line)
+				md5 := mysql.GetMd5(fingerPrint)
+				bs.sqls[md5] = fingerPrint
+			}
+		}
+	}
+	bs.sqlsLen = len(bs.sqls)
+	s.blacklistSqls = bs
+
+	return nil
+}
+
 func (s *Server) parseNode(cfg config.NodeConfig) (*backend.Node, error) {
 	var err error
 	n := new(backend.Node)
@@ -164,10 +210,25 @@ func NewServer(cfg *config.Config) (*Server, error) {
 	s := new(Server)
 
 	s.cfg = cfg
-
+	s.counter = new(Counter)
 	s.addr = cfg.Addr
 	s.user = cfg.User
 	s.password = cfg.Password
+	if len(cfg.Charset) != 0 {
+		cid, ok := mysql.CharsetIds[cfg.Charset]
+		if !ok {
+			return nil, errors.ErrInvalidCharset
+		}
+		s.charset = cfg.Charset
+		s.collation = cid
+	} else {
+		s.charset = mysql.DEFAULT_CHARSET
+		s.collation = mysql.DEFAULT_COLLATION_ID
+	}
+
+	if err := s.parseBlackListSqls(); err != nil {
+		return nil, err
+	}
 
 	/* 加载ip白名单 */
 	if err := s.parseAllowIps(); err != nil {
@@ -199,6 +260,13 @@ func NewServer(cfg *config.Config) (*Server, error) {
 		"address",
 		s.addr)
 	return s, nil
+}
+
+func (s *Server) flushCounter() {
+	for {
+		s.counter.FlushCounter()
+		time.Sleep(1 * time.Second)
+	}
 }
 
 func (s *Server) newClientConn(co net.Conn) *ClientConn {
@@ -246,6 +314,7 @@ func (s *Server) newClientConn(co net.Conn) *ClientConn {
 
 func (s *Server) onConn(c net.Conn) {
 	/* TODO 调用newClientConn需不需要加锁新建客户端连接句柄并赋值附加信息 */
+	s.counter.IncrClientConns()
 	conn := s.newClientConn(c) //新建一个conn
 
 	defer func() {
@@ -261,6 +330,7 @@ func (s *Server) onConn(c net.Conn) {
 		}
 
 		conn.Close()
+		s.counter.DecrClientConns()
 	}()
 
 	/* 判断ip是否在白名单中 */
@@ -294,6 +364,9 @@ func (s *Server) Run() error {
 	s.running = true
 
 	/* 没有收到退出信号时 */
+	// flush counter
+	go s.flushCounter()
+
 	for s.running {
 		/* 主进程监听端口，接收请求 */
 		conn, err := s.listener.Accept()

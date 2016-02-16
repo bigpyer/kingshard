@@ -1,4 +1,4 @@
-// Copyright 2015 The kingshard Authors. All rights reserved.
+// Copyright 2016 The kingshard Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License"): you may
 // not use this file except in compliance with the License. You may obtain
@@ -293,6 +293,7 @@ func (c *ClientConn) Run() {
 
 		/* 按照mysql协议解析命令(只实现了部分命令)、处理数据(节点解析)、返回处理结果 */
 		if err := c.dispatch(data); err != nil {
+			c.proxy.counter.IncrErrLogTotal()
 			golog.Error("server", "Run",
 				err.Error(), c.connectionId,
 			)
@@ -310,6 +311,7 @@ func (c *ClientConn) Run() {
 }
 
 func (c *ClientConn) dispatch(data []byte) error {
+	c.proxy.counter.IncrClientQPS()
 	cmd := data[0]
 	data = data[1:]
 

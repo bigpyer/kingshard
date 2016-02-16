@@ -35,8 +35,13 @@ log_level : debug
 #log_sql: off 
 #only log the query that take more than slow_log_time ms
 #slow_log_time : 100
+# the path of blacklist sql file
+# all these sqls in the file will been forbidden by kingshard
+#blacklist_sql_file: /Users/flike/blacklist
 # only allow this ip list ip to connect kingshard
 #allow_ips: 127.0.0.1
+# the default charset of kingshard is utf8.
+#proxy_charset: utf8mb4
 
 # node is an agenda for real remote mysql server.
 nodes :
@@ -461,3 +466,5 @@ mysql> admin server(opt,k,v) values('show','schema','config');
 ## 6.Requirement and feedback
 
 If You have new functional requirements about kingshard in the production environment, or find a bug in the process of using kingshard. Welcome to send a mail to `flikecn#126.com`, I will reply you as soon as possible.
+
+
