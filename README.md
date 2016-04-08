@@ -7,7 +7,7 @@ kingshard is a high-performance proxy for MySQL powered by Go. Just like other m
 
 ## Feature
 - Splits reads and writes
-- Sharding table across multiple nodes
+- Support hash,range and date sharding across multiple nodes
 - Client's ip ACL control.
 - Transaction in single node.
 - Support limitting the max count of connections to MySQL database.
@@ -20,6 +20,7 @@ kingshard is a high-performance proxy for MySQL powered by Go. Just like other m
 - MySQL HA.
 - Support set the charset of proxy.
 - Support SQL blacklist.
+- Support dynamically changing the config value of kingshard.
 
 ## Install
 ```
@@ -28,13 +29,17 @@ kingshard is a high-performance proxy for MySQL powered by Go. Just like other m
   3. cd src/github.com/flike/kingshard
   4. source ./dev.sh
   5. make
-  6. set the config file (etc/multi.yaml)
-  7. run kingshard (./bin/kingshard -config=etc/multi.yaml)
+  6. set the config file (etc/ks.yaml)
+  7. run kingshard (./bin/kingshard -config=etc/ks.yaml)
 ```
 
 # Details of kingshard
 
 [1.How to use kingshard building a MySQL cluster](./doc/KingDoc/how_to_use_kingshard_EN.md)
+
+## Donate
+
+https://github.com/flike/kingshard/blob/master/doc/KingDoc/support.md
 
 ## License
 

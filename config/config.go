@@ -16,6 +16,7 @@ package config
 
 import (
 	"io/ioutil"
+	"os"
 
 	"github.com/flike/kingshard/core/yaml"
 )
@@ -54,11 +55,11 @@ type NodeConfig struct {
 type SchemaConfig struct {
 	DB        string        `yaml:"db"`
 	Nodes     []string      `yaml:"nodes"`
-	Default   string        `yaml:"default"` //默认路由规则
-	ShardRule []ShardConfig `yaml:"shard"`   //range或hash路由规则
+	Default   string        `yaml:"default"` //default route rule
+	ShardRule []ShardConfig `yaml:"shard"`   //route rule
 }
 
-//range或hash路由规则
+//range,hash or date
 type ShardConfig struct {
 	Table         string   `yaml:"table"`
 	Key           string   `yaml:"key"`
@@ -66,6 +67,7 @@ type ShardConfig struct {
 	Locations     []int    `yaml:"locations"`
 	Type          string   `yaml:"type"`
 	TableRowLimit int      `yaml:"table_row_limit"`
+	DateRange     []string `yaml:"date_range"`
 }
 
 func ParseConfigData(data []byte) (*Config, error) {
@@ -84,4 +86,24 @@ func ParseConfigFile(fileName string) (*Config, error) {
 	}
 
 	return ParseConfigData(data)
+}
+
+func WriteConfigFile(cfg *Config) error {
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+
+	execPath, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	configPath := execPath + "/etc/ks.yaml"
+	err = ioutil.WriteFile(configPath, data, 0755)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

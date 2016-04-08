@@ -26,11 +26,13 @@ import (
 
 	"github.com/flike/kingshard/config"
 	"github.com/flike/kingshard/core/golog"
+	"github.com/flike/kingshard/core/hack"
 	"github.com/flike/kingshard/proxy/server"
 )
 
-var configFile *string = flag.String("config", "/etc/kingshard.conf", "kingshard config file")
+var configFile *string = flag.String("config", "/etc/ks.yaml", "kingshard config file")
 var logLevel *string = flag.String("log-level", "", "log level [debug|info|warn|error], default error")
+var version *bool = flag.Bool("v", false, "the version of kingshard")
 
 const (
 	sqlLogName = "sql.log"
@@ -53,6 +55,11 @@ func main() {
 	flag.Parse()
 
 	/* TODO 使用指针的方式是出于什么考虑? */
+	fmt.Printf("Git commit:%s\n", hack.Version)
+	fmt.Printf("Build time:%s\n", hack.Compile)
+	if *version {
+		return
+	}
 	if len(*configFile) == 0 {
 		fmt.Println("must use a config file")
 		return
