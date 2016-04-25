@@ -74,16 +74,16 @@ func main() {
 
 	//when the log file size greater than 1GB, kingshard will generate a new file
 	if len(cfg.LogPath) != 0 {
+		/* 系统日志 */
 		sysFilePath := path.Join(cfg.LogPath, sysLogName)
-		/* 文件句炳 */
 		sysFile, err := golog.NewRotatingFileHandler(sysFilePath, MaxLogSize, 1)
 		if err != nil {
 			fmt.Printf("new log file error:%v\n", err.Error())
 			return
 		}
-		/* 日志句炳 */
 		golog.GlobalSysLogger = golog.New(sysFile, golog.Lfile|golog.Ltime|golog.Llevel)
 
+		/* sql日志 */
 		sqlFilePath := path.Join(cfg.LogPath, sqlLogName)
 		sqlFile, err := golog.NewRotatingFileHandler(sqlFilePath, MaxLogSize, 1)
 		if err != nil {
