@@ -223,6 +223,7 @@ func (c *ClientConn) getSelectExecDB(tokens []string, tokensLen int) (*ExecuteDB
 					} else {
 						//if the table is not shard table,send the sql
 						//to default db
+						//减少循环次数调用
 						break
 					}
 				}
