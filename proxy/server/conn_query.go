@@ -54,7 +54,10 @@ func (c *ClientConn) handleQuery(sql string) (err error) {
 	/* 不需要分表 */
 	hasHandled, err := c.preHandleShard(sql)
 	if err != nil {
-		golog.Error("server", "preHandleShard", err.Error(), 0, "hasHandled", hasHandled)
+		golog.Error("server", "preHandleShard", err.Error(), 0,
+			"sql", sql,
+			"hasHandled", hasHandled,
+		)
 		return err
 	}
 	/* 如果是不需要分表且已经处理完成，不再执行下面的动作 */
@@ -107,6 +110,8 @@ func (c *ClientConn) handleQuery(sql string) (err error) {
 		return c.handleAdminHelp(v)
 	case *sqlparser.UseDB:
 		return c.handleUseDB(v)
+	case *sqlparser.SimpleSelect:
+		return c.handleSimpleSelect(v)
 	default:
 		return fmt.Errorf("statement %T not support now", stmt)
 	}

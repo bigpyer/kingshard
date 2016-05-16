@@ -298,6 +298,9 @@ func (c *ClientConn) Run() {
 				err.Error(), c.connectionId,
 			)
 			c.writeError(err)
+			if err == mysql.ErrBadConn {
+				c.Close()
+			}
 		}
 
 		/* 如果客户端主动关闭连接，则释放客户端连接资源 */
@@ -318,6 +321,7 @@ func (c *ClientConn) dispatch(data []byte) error {
 	switch cmd {
 	/* 客户端退出命令 */
 	case mysql.COM_QUIT:
+		c.handleRollback()
 		c.Close()
 		return nil
 		/* 包含SELECT、INSERT、UPDATE、DELETE、REPLACE、SET、BEGIN、COMMIT、ROLLBACK、ADMIN等 */
