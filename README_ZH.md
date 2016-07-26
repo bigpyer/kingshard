@@ -1,8 +1,8 @@
-[![Build Status](https://travis-ci.org/flike/kingshard.svg?branch=master)](https://travis-ci.org/flike/kingshard)
+[![Author](https://img.shields.io/badge/author-@flike-blue.svg?style=flat)](http://weibo.com/chenfei001) [![Build Status](https://travis-ci.org/flike/kingshard.svg?branch=master)](https://travis-ci.org/flike/kingshard) [![Project Status](https://img.shields.io/badge/status-stable-green.svg)](https://github.com/flike/kingshard) [![Platform](https://img.shields.io/badge/platform-%20Linux%20Windows%20macOS-green.svg?style=flat)](https://github.com/flike/kingshard)
 
 # kingshard简介
 
-kingshard是一个由Go开发高性能MySQL Proxy项目，kingshard在满足基本的读写分离的功能上，致力于简化MySQL分库分表操作；能够让DBA通过kingshard轻松平滑地实现MySQL数据库扩容。 **kingshard的性能大约是直连MySQL性能的80%以上**。
+kingshard是一个由Go开发高性能MySQL Proxy项目，kingshard在满足基本的读写分离的功能上，致力于简化MySQL分库分表操作；能够让DBA通过kingshard轻松平滑地实现MySQL数据库扩容。 **kingshard的性能是直连MySQL性能的80%以上**。
 
 ## 主要功能：
 
@@ -53,6 +53,8 @@ kingshard是一个由Go开发高性能MySQL Proxy项目，kingshard在满足基�
 [7.kingshard SQL黑名单功能介绍](./doc/KingDoc/sql_blacklist_introduce.md)
 
 [8.kingshard的FAQ](./doc/KingDoc/function_FAQ.md)
+
+[9.kingshard SQL支持范围](./doc/KingDoc/kingshard_support_sql.md)
 
 ### kingshard架构与设计
 

@@ -20,7 +20,9 @@ package sqlparser
 
 import (
 	"errors"
+	"strconv"
 
+	"github.com/flike/kingshard/core/hack"
 	"github.com/flike/kingshard/sqltypes"
 )
 
@@ -140,6 +142,7 @@ func (node *Union) Format(buf *TrackedBuffer) {
 // Insert represents an INSERT statement.
 type Insert struct {
 	Comments Comments
+	Ignore   string
 	Table    *TableName
 	Columns  Columns
 	Rows     InsertRows
@@ -147,8 +150,8 @@ type Insert struct {
 }
 
 func (node *Insert) Format(buf *TrackedBuffer) {
-	buf.Fprintf("insert %vinto %v%v %v%v",
-		node.Comments,
+	buf.Fprintf("insert %v%s into %v%v %v%v",
+		node.Comments, node.Ignore,
 		node.Table, node.Columns, node.Rows, node.OnDup)
 }
 
@@ -207,7 +210,9 @@ func (node *Set) Format(buf *TrackedBuffer) {
 // Table is set for AST_ALTER, AST_DROP, AST_RENAME.
 // NewName is set for AST_ALTER, AST_CREATE, AST_RENAME.
 type DDL struct {
-	Action  string
+	Action string
+	//or alter and rename
+	Ignore  string
 	Table   []byte
 	NewName []byte
 }
@@ -224,7 +229,9 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 	case AST_CREATE:
 		buf.Fprintf("%s table %s", node.Action, node.NewName)
 	case AST_RENAME:
-		buf.Fprintf("%s table %s %s", node.Action, node.Table, node.NewName)
+		buf.Fprintf("%s %s table %s %s", node.Action, node.Ignore, node.Table, node.NewName)
+	case AST_ALTER:
+		buf.Fprintf("%s %s table %s", node.Action, node.Ignore, node.Table)
 	default:
 		buf.Fprintf("%s table %s", node.Action, node.Table)
 	}
@@ -829,6 +836,41 @@ func (node *Order) Format(buf *TrackedBuffer) {
 // Limit represents a LIMIT clause.
 type Limit struct {
 	Offset, Rowcount ValExpr
+}
+
+func (node *Limit) RewriteLimit() (*Limit, error) {
+	if node == nil {
+		return nil, nil
+	}
+
+	var offset, count int64
+	var err error
+	newLimit := new(Limit)
+
+	if node.Offset == nil {
+		offset = 0
+	} else {
+		if o, ok := node.Offset.(NumVal); !ok {
+			return nil, errors.New("Limit.offset is not number")
+		} else {
+			if offset, err = strconv.ParseInt(hack.String([]byte(o)), 10, 64); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	if r, ok := node.Rowcount.(NumVal); !ok {
+		return nil, errors.New("Limit.RowCount is not number")
+	} else {
+		if count, err = strconv.ParseInt(hack.String([]byte(r)), 10, 64); err != nil {
+			return nil, err
+		}
+	}
+
+	allRowCount := strconv.FormatInt((offset + count), 10)
+	newLimit.Rowcount = NumVal(allRowCount)
+
+	return newLimit, nil
 }
 
 func (node *Limit) Format(buf *TrackedBuffer) {
