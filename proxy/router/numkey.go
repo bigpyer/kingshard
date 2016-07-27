@@ -57,7 +57,7 @@ func ParseNumSharding(Locations []int, TableRowLimit int) ([]NumKeyRange, error)
 
 	ranges := make([]NumKeyRange, tableCount)
 	for i := 0; i < tableCount; i++ {
-		/* 计算表分区范围 */
+		/* 计算每个分表的分区键范围 */
 		ranges[i].Start = int64(i * TableRowLimit)
 		ranges[i].End = int64((i + 1) * TableRowLimit)
 	}
@@ -72,6 +72,7 @@ func ParseDayRange(dateRange string) ([]int, error) {
 	dateDays := make([]int, 0)
 	dateLength := 8
 
+	//只有一天的场景
 	dateTmp := strings.SplitN(dateRange, "-", 2)
 	if len(dateTmp) == 1 {
 		if len(dateTmp[0]) != dateLength {
@@ -83,6 +84,8 @@ func ParseDayRange(dateRange string) ([]int, error) {
 		}
 		return []int{dateNum}, nil
 	}
+
+	//范围场景
 	if len(dateTmp) != 2 {
 		return nil, errors.ErrDateRangeIllegal
 	}
@@ -90,6 +93,7 @@ func ParseDayRange(dateRange string) ([]int, error) {
 		return nil, errors.ErrDateRangeIllegal
 	}
 	//change the begin day and the end day
+	//调整时间范围的顺序
 	if dateTmp[1] < dateTmp[0] {
 		dateTmp[0], dateTmp[1] = dateTmp[1], dateTmp[0]
 	}
@@ -173,6 +177,7 @@ func ParseMonthRange(dateRange string) ([]int, error) {
 			beginYear++
 		}
 
+		//将月转化为数字
 		monthNum := beginYear*100 + monthTmp
 		dateMonth = append(dateMonth, monthNum)
 		monthTmp++

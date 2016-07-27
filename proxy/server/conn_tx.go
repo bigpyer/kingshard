@@ -58,6 +58,7 @@ func (c *ClientConn) commit() (err error) {
 		if e := co.Commit(); e != nil {
 			err = e
 		}
+		//连接回收到连接池
 		co.Close()
 	}
 

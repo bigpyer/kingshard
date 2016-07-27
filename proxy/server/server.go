@@ -199,6 +199,7 @@ func (s *Server) parseSchema() error {
 		nodes[n] = s.GetNode(n)
 	}
 
+	//解析分表规则
 	rule, err := router.NewRouter(&schemaCfg)
 	if err != nil {
 		return err
@@ -239,6 +240,7 @@ func NewServer(cfg *config.Config) (*Server, error) {
 		mysql.DEFAULT_COLLATION_NAME = mysql.Collations[cid]
 	}
 
+	//黑名单sql
 	if err := s.parseBlackListSqls(); err != nil {
 		return nil, err
 	}
@@ -253,6 +255,7 @@ func NewServer(cfg *config.Config) (*Server, error) {
 		return nil, err
 	}
 
+	/* 加载schema信息 */
 	/* 加载分表规则 */
 	if err := s.parseSchema(); err != nil {
 		return nil, err
@@ -295,6 +298,7 @@ func (s *Server) newClientConn(co net.Conn) *ClientConn {
 	c.c = tcpConn
 
 	/* 将服务端schema赋值给客户端,为分表做准备 */
+	//TODO 客户端不需要记录schema信息
 	c.schema = s.GetSchema()
 
 	/* mysql通讯协议结构 */
@@ -557,7 +561,7 @@ func (s *Server) Run() error {
 	go s.flushCounter()
 
 	for s.running {
-		/* 主进程监听端口，接收请求 */
+		/* 主进程监听端口，接收请求,常驻程序阻塞点 */
 		conn, err := s.listener.Accept()
 		if err != nil {
 			golog.Error("server", "Run", err.Error(), 0)

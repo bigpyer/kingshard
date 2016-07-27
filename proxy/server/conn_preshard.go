@@ -50,6 +50,7 @@ func (c *ClientConn) preHandleShard(sql string) (bool, error) {
 		return false, errors.ErrCmdUnsupport
 	}
 	//filter the blacklist sql
+	//黑名单sql判断
 	if c.proxy.blacklistSqls[c.proxy.blacklistSqlsIndex].sqlsLen != 0 {
 		if c.isBlacklistSql(sql) {
 			golog.OutputSql("Forbidden", "%s->%s:%s",
@@ -62,6 +63,7 @@ func (c *ClientConn) preHandleShard(sql string) (bool, error) {
 		}
 	}
 
+	//TODO 没看懂
 	tokens := strings.FieldsFunc(sql, hack.IsSqlSep)
 
 	if len(tokens) == 0 {
@@ -159,6 +161,7 @@ func (c *ClientConn) GetTransExecDB(tokens []string, sql string) (*ExecuteDB, er
 func (c *ClientConn) GetExecDB(tokens []string, sql string) (*ExecuteDB, error) {
 	tokensLen := len(tokens)
 	if 0 < tokensLen {
+		//获取第一次操作ID
 		tokenId, ok := mysql.PARSE_TOKEN_MAP[strings.ToLower(tokens[0])]
 		if ok == true {
 			switch tokenId {
@@ -220,6 +223,7 @@ func (c *ClientConn) getSelectExecDB(tokens []string, tokensLen int) (*ExecuteDB
 		for i := 1; i < tokensLen; i++ {
 			if strings.ToLower(tokens[i]) == mysql.TK_STR_FROM {
 				if i+1 < tokensLen {
+					//获取操作的表名称，并判断是否需要分表
 					tableName := sqlparser.GetTableName(tokens[i+1])
 					if _, ok := rules[tableName]; ok {
 						return nil, nil
@@ -239,6 +243,7 @@ func (c *ClientConn) getSelectExecDB(tokens []string, tokensLen int) (*ExecuteDB
 	}
 
 	//if send to master
+	//根据注释判断是否走主节点
 	if 2 < tokensLen {
 		if strings.ToLower(tokens[1]) == mysql.TK_STR_MASTER_HINT {
 			executeDB.IsSlave = false

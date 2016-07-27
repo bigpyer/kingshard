@@ -334,7 +334,7 @@ func (c *ClientConn) dispatch(data []byte) error {
 		/* 获取数据库字段信息,等同于show fields from table */
 	case mysql.COM_FIELD_LIST:
 		return c.handleFieldList(data)
-		/* prepare绑定变量支持(一般在存储过程中使用) */
+		/* prepare绑定变量支持 */
 	case mysql.COM_STMT_PREPARE:
 		return c.handleStmtPrepare(hack.String(data))
 	case mysql.COM_STMT_EXECUTE:

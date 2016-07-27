@@ -30,7 +30,7 @@ var (
 	pingPeriod = int64(time.Second * 16)
 )
 
-//proxy <-> mysql server
+//mysql连接
 type Conn struct {
 	conn net.Conn
 
@@ -66,6 +66,7 @@ func (c *Conn) Connect(addr string, user string, password string, db string) err
 	return c.ReConnect()
 }
 
+//与后端mysql握手、建立连接
 func (c *Conn) ReConnect() error {
 	if c.conn != nil {
 		c.conn.Close()
@@ -123,6 +124,7 @@ func (c *Conn) ReConnect() error {
 	return nil
 }
 
+//关闭连接
 func (c *Conn) Close() error {
 	if c.conn != nil {
 		c.conn.Close()
@@ -492,6 +494,7 @@ func (c *Conn) exec(query string) (*mysql.Result, error) {
 	return c.readResult(false)
 }
 
+//读取mysql result set
 func (c *Conn) readResultset(data []byte, binary bool) (*mysql.Result, error) {
 	result := &mysql.Result{
 		Status:       0,

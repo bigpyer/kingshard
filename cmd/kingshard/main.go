@@ -125,6 +125,7 @@ func main() {
 		svr.Close()
 	}()
 
+	//主程序入口
 	svr.Run()
 }
 

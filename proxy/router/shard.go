@@ -123,6 +123,7 @@ type RangeShard interface {
 	EqualStop(key interface{}, index int) bool
 }
 
+//hash分表只需要记录一个表总数，取模即可
 type HashShard struct {
 	ShardNum int
 }

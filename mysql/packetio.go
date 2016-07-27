@@ -35,7 +35,9 @@ type PacketIO struct {
 func NewPacketIO(conn net.Conn) *PacketIO {
 	p := new(PacketIO)
 
+	//流式读buffer
 	p.rb = bufio.NewReaderSize(conn, defaultReaderSize)
+	//写套接字
 	p.wb = conn
 
 	p.Sequence = 0
@@ -43,10 +45,11 @@ func NewPacketIO(conn net.Conn) *PacketIO {
 	return p
 }
 
+//TODO 递归地从mysql连接句柄读取数据
 func (p *PacketIO) ReadPacket() ([]byte, error) {
 	header := []byte{0, 0, 0, 0}
 
-	/* 首先获取报文长度 */
+	/* 首先获取报文长度和序列号 */
 	if _, err := io.ReadFull(p.rb, header); err != nil {
 		return nil, ErrBadConn
 	}
@@ -64,6 +67,7 @@ func (p *PacketIO) ReadPacket() ([]byte, error) {
 
 	p.Sequence++
 
+	//读取请求数据
 	data := make([]byte, length)
 	if _, err := io.ReadFull(p.rb, data); err != nil {
 		return nil, ErrBadConn

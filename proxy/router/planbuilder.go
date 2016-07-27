@@ -294,6 +294,7 @@ func (plan *Plan) calRouteIndexs() error {
 		if err != nil {
 			return err
 		}
+		//获取表下标对应的节点下标
 		plan.RouteNodeIndexs = plan.TindexsToNindexs(plan.RouteTableIndexs)
 		return nil
 	case sqlparser.BoolExpr:
@@ -471,6 +472,7 @@ func (plan *Plan) GetIRKeyIndex(cols sqlparser.Columns) error {
 	return nil
 }
 
+//根据具体规则和分区键值获取具体的表下标
 func (plan *Plan) getTableIndexByValue(valExpr sqlparser.ValExpr) (int, error) {
 	value := plan.getBoundValue(valExpr)
 	return plan.Rule.FindTableIndex(value)

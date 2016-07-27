@@ -138,7 +138,7 @@ func NewRouter(schemaConfig *config.SchemaConfig) (*Router, error) {
 			if _, ok := rt.Rules[rule.Table]; ok {
 				return nil, fmt.Errorf("table %s rule in %s duplicate", rule.Table, rule.DB)
 			}
-			/* 以表名称为key，加载规则map */
+			/* 以表名称为key，加载对应的分表规则 */
 			rt.Rules[rule.Table] = rule
 		}
 	}
@@ -160,6 +160,7 @@ func (r *Router) GetRule(table string) *Rule {
 	}
 }
 
+//计算分表规则
 func parseRule(db string, cfg *config.ShardConfig) (*Rule, error) {
 	r := new(Rule)
 	r.DB = db
@@ -178,7 +179,7 @@ func parseRule(db string, cfg *config.ShardConfig) (*Rule, error) {
 		for i := 0; i < len(cfg.Locations); i++ {
 			for j := 0; j < cfg.Locations[i]; j++ {
 				r.SubTableIndexs = append(r.SubTableIndexs, j+sumTables)
-				r.TableToNode[j+sumTables] = i
+				r.TableToNode[j+sumTables] = i //建立表下标到节点下标的映射关系,都是从0下标开始
 			}
 			sumTables += cfg.Locations[i]
 		}
@@ -191,7 +192,7 @@ func parseRule(db string, cfg *config.ShardConfig) (*Rule, error) {
 			if err != nil {
 				return nil, err
 			}
-			for _, v := range dayNumbers {
+			for _, v := range dayNumbers { //建立表时间后缀(天)到节点下标的映射关系,都是从0下标开始
 				r.SubTableIndexs = append(r.SubTableIndexs, v)
 				r.TableToNode[v] = i
 			}
@@ -205,7 +206,7 @@ func parseRule(db string, cfg *config.ShardConfig) (*Rule, error) {
 			if err != nil {
 				return nil, err
 			}
-			for _, v := range monthNumbers {
+			for _, v := range monthNumbers { //建立表时间后缀(月)到节点下标的映射关系,都是从0下标开始
 				r.SubTableIndexs = append(r.SubTableIndexs, v)
 				r.TableToNode[v] = i
 			}
@@ -219,7 +220,7 @@ func parseRule(db string, cfg *config.ShardConfig) (*Rule, error) {
 			if err != nil {
 				return nil, err
 			}
-			for _, v := range yearNumbers {
+			for _, v := range yearNumbers { //建立表时间后缀(年)到节点下标的映射关系,都是从0下标开始
 				r.TableToNode[v] = i
 				r.SubTableIndexs = append(r.SubTableIndexs, v)
 			}
@@ -233,6 +234,10 @@ func parseRule(db string, cfg *config.ShardConfig) (*Rule, error) {
 	return r, nil
 }
 
+/**
+ * 获取不同分表规则的计算基数"
+ * 时间分表不需要基数，只需要根据分表类型和时间戳进行匹配即可
+**/
 func parseShard(r *Rule, cfg *config.ShardConfig) error {
 	switch r.Type {
 	case HashRuleType:
@@ -314,7 +319,7 @@ func (r *Router) buildSelectPlan(statement sqlparser.Statement) (*Plan, error) {
 	where = stmt.Where
 
 	if where != nil {
-		plan.Criteria = where.Expr //路由条件
+		plan.Criteria = where.Expr //计算路由节点下标和表下标
 		err = plan.calRouteIndexs()
 		if err != nil {
 			golog.Error("Route", "BuildSelectPlan", err.Error(), 0)
@@ -353,7 +358,7 @@ func (r *Router) buildInsertPlan(statement sqlparser.Statement) (*Plan, error) {
 	//根据sql语句的表，获得对应的分片规则
 	plan.Rule = r.GetRule(sqlparser.String(stmt.Table))
 
-	/* OnDup含义 */
+	/* TODO OnDup含义 */
 	if stmt.OnDup != nil {
 		/* set类型的insert语句 */
 		err := plan.Rule.checkUpdateExprs(sqlparser.UpdateExprs(stmt.OnDup))
@@ -364,14 +369,14 @@ func (r *Router) buildInsertPlan(statement sqlparser.Statement) (*Plan, error) {
 
 	plan.Criteria = plan.checkValuesType(stmt.Rows.(sqlparser.Values))
 
-	/* 计算分表目标节点 */
+	/* 计算分表目标表下标、节点下标 */
 	err := plan.calRouteIndexs()
 	if err != nil {
 		golog.Error("Route", "BuildInsertPlan", err.Error(), 0)
 		return nil, err
 	}
 
-	/* 重新生成insert sql语句 */
+	/* 重写insert sql语句 */
 	err = r.generateInsertSql(plan, stmt)
 	if err != nil {
 		return nil, err
@@ -608,6 +613,7 @@ func (r *Router) rewriteSelectSql(plan *Plan, node *sqlparser.Select, tableIndex
 	return buf.String()
 }
 
+//重写select sql
 func (r *Router) generateSelectSql(plan *Plan, stmt sqlparser.Statement) error {
 	sqls := make(map[string][]string)
 	node, ok := stmt.(*sqlparser.Select)
@@ -639,6 +645,7 @@ func (r *Router) generateSelectSql(plan *Plan, stmt sqlparser.Statement) error {
 	return nil
 }
 
+//生成多个节点各自的insert sql语句
 func (r *Router) generateInsertSql(plan *Plan, stmt sqlparser.Statement) error {
 	sqls := make(map[string][]string)
 	node, ok := stmt.(*sqlparser.Insert)
@@ -662,6 +669,7 @@ func (r *Router) generateInsertSql(plan *Plan, stmt sqlparser.Statement) error {
 			nodeName := r.Nodes[nodeIndex]
 
 			buf.Fprintf("insert %v%s into %v", node.Comments, node.Ignore, node.Table)
+			//如果是按时间分表，可能超过长度，但都是数字，不影响
 			fmt.Fprintf(buf, "_%04d", plan.RouteTableIndexs[i])
 			buf.Fprintf("%v %v%v",
 				node.Columns,

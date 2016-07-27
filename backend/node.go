@@ -52,6 +52,7 @@ type Node struct {
 	LastSlavePing  int64
 }
 
+//节点后端mysql实例存活检测
 func (n *Node) CheckNode() {
 	//to do
 	//1 check connection alive
@@ -105,6 +106,8 @@ func (n *Node) GetSlaveConn() (*BackendConn, error) {
 	return db.GetConn()
 }
 
+//检查master实例是否存活,如果实例已经失去连接超过固定时间，则将master状态置为Down
+//如果master可以ping通，则将master重新上线，状态置为up
 func (n *Node) checkMaster() {
 	db := n.Master
 	if db == nil {
@@ -134,6 +137,8 @@ func (n *Node) checkMaster() {
 	}
 }
 
+//检查所有的从实例是否存活,如果从实例未检测超过一定时间，则将从实例下线
+//TODO 下线后不需要维护rr队列吗?
 func (n *Node) checkSlave() {
 	/* TODO 为什么加读锁? */
 	n.RLock()
@@ -171,6 +176,7 @@ func (n *Node) checkSlave() {
 
 }
 
+//添加从实例，建立一组连接
 func (n *Node) AddSlave(addr string) error {
 	var db *DB
 	var weight int
@@ -325,6 +331,7 @@ func (n *Node) DownSlave(addr string, state int32) error {
 	return nil
 }
 
+//构造master实例，建立master连接池
 func (n *Node) ParseMaster(masterStr string) error {
 	var err error
 	if len(masterStr) == 0 {
@@ -336,6 +343,7 @@ func (n *Node) ParseMaster(masterStr string) error {
 }
 
 //slaveStr(127.0.0.1:3306@2,192.168.0.12:3306@3)
+//构造slave数组，建立各个slave实例连接池
 func (n *Node) ParseSlave(slaveStr string) error {
 	var db *DB
 	var weight int

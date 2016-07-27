@@ -58,6 +58,7 @@ func Open(addr string, user string, password string, dbName string, maxConnNum i
 	db.password = password
 	db.db = dbName
 
+	//如果最大连接数大于零
 	if 0 < maxConnNum {
 		db.maxConnNum = maxConnNum
 		/* 最大连接数如果小于16则无效 */
@@ -72,21 +73,21 @@ func Open(addr string, user string, password string, dbName string, maxConnNum i
 		db.InitConnNum = InitConnCount
 	}
 	//check connection
-	/* 在建立DB连接池之前首先检查是否可以正确建立连接 */
+	/* 在建立DB连接池之前首先检查是否可以正确建立连接,同时也是后端保活goroutine的检测连接 */
 	db.checkConn, err = db.newConn()
 	if err != nil {
 		db.Close()
 		return nil, err
 	}
 
-	/* TODO 空闲连接channel,当cacheConns耗尽时使用idleConns中的连接 为什么是放入channel */
-	db.idleConns = make(chan *Conn, db.maxConnNum)
 	/* 缓存连接channel,优先使用cache channel中的连接 */
 	db.cacheConns = make(chan *Conn, db.maxConnNum)
+	/* 空闲连接channel,当cacheConns耗尽时使用idleConns中的连接 */
+	db.idleConns = make(chan *Conn, db.maxConnNum)
 	atomic.StoreInt32(&(db.state), Unknown)
 
 	for i := 0; i < db.maxConnNum; i++ {
-		/* 1/4的连接保存在cacheConns */
+		/* 1/4的已经建立的连接保存在cacheConns */
 		if i < db.InitConnNum {
 			conn, err := db.newConn()
 			if err != nil {
@@ -96,7 +97,7 @@ func Open(addr string, user string, password string, dbName string, maxConnNum i
 			conn.pushTimestamp = time.Now().Unix()
 			db.cacheConns <- conn
 		} else {
-			/* 3/4的连接保存在idleConns */
+			/* 3/4的初始化连接保存在idleConns,但是未建立连接 */
 			conn := new(Conn)
 			db.idleConns <- conn
 		}
@@ -170,6 +171,7 @@ func (db *DB) getIdleConns() chan *Conn {
 	return conns
 }
 
+//通过check connection进行ping，检查后端db是否存活
 func (db *DB) Ping() error {
 	var err error
 	if db.checkConn == nil {
@@ -189,6 +191,7 @@ func (db *DB) Ping() error {
 	return nil
 }
 
+//新建一条连接
 func (db *DB) newConn() (*Conn, error) {
 	co := new(Conn)
 
@@ -199,6 +202,7 @@ func (db *DB) newConn() (*Conn, error) {
 	return co, nil
 }
 
+//关闭连接，连接入备用连接池
 func (db *DB) closeConn(co *Conn) error {
 	if co != nil {
 		co.Close()
@@ -276,6 +280,7 @@ func (db *DB) GetConnFromCache(cacheConns chan *Conn) *Conn {
 	var err error
 	for 0 < len(cacheConns) {
 		co = <-cacheConns
+		//取出连接、进行存活检查
 		if co != nil && PingPeroid < time.Now().Unix()-co.pushTimestamp {
 			err = co.Ping()
 			if err != nil {
@@ -290,6 +295,7 @@ func (db *DB) GetConnFromCache(cacheConns chan *Conn) *Conn {
 	return co
 }
 
+//从备用idle conns中取出一个初始连接，并建立与后端连接
 func (db *DB) GetConnFromIdle(cacheConns, idleConns chan *Conn) (*Conn, error) {
 	var co *Conn
 	var err error
@@ -316,6 +322,7 @@ func (db *DB) GetConnFromIdle(cacheConns, idleConns chan *Conn) (*Conn, error) {
 	return co, nil
 }
 
+//回收连接
 func (db *DB) PushConn(co *Conn, err error) {
 	if co == nil {
 		return
@@ -344,6 +351,7 @@ type BackendConn struct {
 	db *DB
 }
 
+//如果有错误，关闭连接;否则回收连接
 func (p *BackendConn) Close() {
 	if p != nil && p.Conn != nil {
 		if p.Conn.pkgErr != nil {
@@ -355,6 +363,7 @@ func (p *BackendConn) Close() {
 	}
 }
 
+//从连接池中获取连接
 func (db *DB) GetConn() (*BackendConn, error) {
 	c, err := db.PopConn()
 	if err != nil {

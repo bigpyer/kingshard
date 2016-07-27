@@ -51,7 +51,7 @@ func (c *ClientConn) handleQuery(sql string) (err error) {
 	/* 删除sql语句最后的分号 */
 	sql = strings.TrimRight(sql, ";")
 
-	/* 不需要分表 */
+	/* 是否需要分表,如果不需要分表直接进行处理 */
 	hasHandled, err := c.preHandleShard(sql)
 	if err != nil {
 		golog.Error("server", "preHandleShard", err.Error(), 0,
@@ -106,10 +106,13 @@ func (c *ClientConn) handleQuery(sql string) (err error) {
 	/* 处理管理语句 */
 	case *sqlparser.Admin:
 		return c.handleAdmin(v)
+	/* 管理帮助 */
 	case *sqlparser.AdminHelp:
 		return c.handleAdminHelp(v)
+	/* use db */
 	case *sqlparser.UseDB:
 		return c.handleUseDB(v.DB)
+	/* 简单查询，目前是select last_insert_id() */
 	case *sqlparser.SimpleSelect:
 		return c.handleSimpleSelect(v)
 	default:
@@ -126,12 +129,13 @@ func (c *ClientConn) getBackendConn(n *backend.Node, fromSlave bool) (co *backen
 		/* 如果从库标识为真 */
 		if fromSlave {
 			/* 根据round robin获取一个从实例连接 */
+			/* 如果从实例状态为Down，则走主实例 */
 			co, err = n.GetSlaveConn()
 			if err != nil {
 				co, err = n.GetMasterConn()
 			}
 		} else {
-			/* 默认使用主实例 */
+			/* 如果非读从，则走主 */
 			co, err = n.GetMasterConn()
 		}
 		if err != nil {
@@ -580,10 +584,12 @@ func (c *ClientConn) preHandleShard(sql string) (bool, error) {
 }
 
 func (c *ClientConn) handleExec(stmt sqlparser.Statement, args []interface{}) error {
+	//获取分表执行计划
 	plan, err := c.schema.rule.BuildPlan(stmt)
 	if err != nil {
 		return err
 	}
+	//根据分表执行计划获取对应的连接,多个节点则返回多个连接
 	conns, err := c.getShardConns(false, plan)
 	defer c.closeShardConns(conns, err != nil)
 	if err != nil {
@@ -596,8 +602,10 @@ func (c *ClientConn) handleExec(stmt sqlparser.Statement, args []interface{}) er
 
 	var rs []*mysql.Result
 
+	//多节点异步执行sql
 	rs, err = c.executeInMultiNodes(conns, plan.RewrittenSqls, args)
 	if err == nil {
+		//汇总执行结果
 		err = c.mergeExecResult(rs)
 	}
 

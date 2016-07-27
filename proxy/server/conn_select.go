@@ -123,7 +123,7 @@ func (c *ClientConn) handleSelect(stmt *sqlparser.Select, args []interface{}) er
 		return c.writeResultset(c.status, r)
 	}
 
-	/* 执行重新拼装的sql，获取查询结果 */
+	/* 多节点异步执行select sql */
 	var rs []*mysql.Result
 	rs, err = c.executeInMultiNodes(conns, plan.RewrittenSqls, args)
 	c.closeShardConns(conns, false)
@@ -132,7 +132,7 @@ func (c *ClientConn) handleSelect(stmt *sqlparser.Select, args []interface{}) er
 		return err
 	}
 
-	/* 汇总并应答查询结果 */
+	/* 汇总并应答查询结果主要处理group by、order by、sql function等结果 */
 	err = c.mergeSelectResult(rs, stmt)
 	if err != nil {
 		golog.Error("ClientConn", "handleSelect", err.Error(), c.connectionId)
