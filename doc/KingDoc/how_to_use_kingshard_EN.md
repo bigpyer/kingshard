@@ -58,7 +58,7 @@ nodes :
     # master represents a real mysql master server 
     master : 127.0.0.1:3306
 
-    # slave represents a real mysql salve server,and the number after '@' is 
+    # slave represents a real mysql slave server,and the number after '@' is 
     # read load weight of this slave.
     slave : 
     down_after_noalive : 32
@@ -75,7 +75,7 @@ nodes :
     # master represents a real mysql master server 
     master : 192.168.59.103:3307
 
-    # slave represents a real mysql salve server 
+    # slave represents a real mysql slave server 
     slave : 
 
     # down mysql after N seconds noalive
@@ -510,6 +510,17 @@ admin server(opt,k,v) values('del','black_sql','select count(*) from sbtest1')
 #save config
 admin server(opt,k,v) values('save','proxy','config')
 ```
+
+### 5.4 support LVS/Keepalived
+
+```
+#show status of kingshard
+admin server(opt,k,v) values('show','proxy','status')
+
+#change status of kingshard online/offline
+admin server(opt,k,v) values('change','proxy','online')
+
+`````
 
 ## 6.Requirement and feedback
 
