@@ -111,7 +111,7 @@ func (c *ClientConn) handleSelect(stmt *sqlparser.Select, args []interface{}) er
 		}
 	}
 
-	/* TODO 获取分片连接? */
+	/* 根据执行计划，获取相应节点的连接列表 */
 	conns, err := c.getShardConns(fromSlave, plan)
 	if err != nil {
 		golog.Error("ClientConn", "handleSelect", err.Error(), c.connectionId)

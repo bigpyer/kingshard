@@ -113,16 +113,32 @@ func main() {
 	signal.Notify(sc,
 		syscall.SIGINT,
 		syscall.SIGTERM,
-		syscall.SIGQUIT)
+		syscall.SIGQUIT,
+		syscall.SIGPIPE,
+	)
 
 	/*单独的协程做信号监控*/
 	go func() {
+<<<<<<< HEAD
 		/* 阻塞 */
 		sig := <-sc
 		golog.Info("main", "main", "Got signal", 0, "signal", sig)
 		golog.GlobalSysLogger.Close()
 		golog.GlobalSqlLogger.Close()
 		svr.Close()
+=======
+		for {
+			sig := <-sc
+			if sig == syscall.SIGINT || sig == syscall.SIGTERM || sig == syscall.SIGQUIT {
+				golog.Info("main", "main", "Got signal", 0, "signal", sig)
+				golog.GlobalSysLogger.Close()
+				golog.GlobalSqlLogger.Close()
+				svr.Close()
+			} else if sig == syscall.SIGPIPE {
+				golog.Info("main", "main", "Ignore broken pipe signal", 0)
+			}
+		}
+>>>>>>> 09ed716df0de1f0ec6091638604fab29fece6442
 	}()
 
 	//主程序入口

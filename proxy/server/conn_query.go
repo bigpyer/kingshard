@@ -218,8 +218,8 @@ func (c *ClientConn) getShardConns(fromSlave bool, plan *router.Plan) (map[strin
 func (c *ClientConn) executeInNode(conn *backend.BackendConn, sql string, args []interface{}) ([]*mysql.Result, error) {
 	var state string
 
-	/* TODO 根据mysql通讯协议，向后端传输并执行sql语句 */
 	startTime := time.Now().UnixNano()
+	/* 根据mysql通讯协议，向后端传输并执行sql语句，并获取执行结果 */
 	r, err := conn.Execute(sql, args...)
 	if err != nil {
 		state = "ERROR"

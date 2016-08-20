@@ -355,7 +355,6 @@ func (s *Server) newClientConn(co net.Conn) *ClientConn {
 }
 
 func (s *Server) onConn(c net.Conn) {
-	/* TODO 调用newClientConn需不需要加锁新建客户端连接句柄并赋值附加信息 */
 	s.counter.IncrClientConns()
 	conn := s.newClientConn(c) //新建一个conn
 
