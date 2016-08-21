@@ -80,7 +80,7 @@ func HashValue(value interface{}) uint64 {
 		return uint64(val)
 	case int64:
 		return uint64(val)
-	case string:
+	case string: //HAHS分表方式支持字符串
 		return uint64(crc32.ChecksumIEEE(hack.Slice(val)))
 	case []byte:
 		return uint64(crc32.ChecksumIEEE(val))

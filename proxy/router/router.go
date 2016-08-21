@@ -359,7 +359,7 @@ func (r *Router) buildInsertPlan(statement sqlparser.Statement) (*Plan, error) {
 		return nil, errors.ErrIRNoColumns
 	}
 
-	//根据sql语句的表，获得对应的分片规则
+	//根据sql语句中的表，获得对应的分片规则
 	plan.Rule = r.GetRule(sqlparser.String(stmt.Table))
 
 	/* TODO OnDup含义 */

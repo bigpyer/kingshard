@@ -35,7 +35,9 @@ type Plan struct {
 	Rule *Rule
 
 	Criteria sqlparser.SQLNode
-	KeyIndex int //used for insert/replace to find shard key idx
+	//used for insert/replace to find shard key idx
+	//分区键下标
+	KeyIndex int
 	//used for insert/replace values,key is table index,and value is
 	//the rows for insert or replace.
 	Rows map[int]sqlparser.Values
@@ -284,7 +286,7 @@ func (plan *Plan) getDateShardTableIndex(expr sqlparser.BoolExpr) ([]int, error)
 	return plan.RouteTableIndexs, nil
 }
 
-//计算表下标和node下标
+//计算本次执行计划表下标和节点下标
 func (plan *Plan) calRouteIndexs() error {
 	var err error
 	nodesCount := len(plan.Rule.Nodes)
@@ -500,7 +502,9 @@ func (plan *Plan) GetIRKeyIndex(cols sqlparser.Columns) error {
 
 //根据具体规则和分区键值获取具体的表下标
 func (plan *Plan) getTableIndexByValue(valExpr sqlparser.ValExpr) (int, error) {
+	//计算边界值
 	value := plan.getBoundValue(valExpr)
+	//获取具体的表下标
 	return plan.Rule.FindTableIndex(value)
 }
 

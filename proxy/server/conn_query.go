@@ -585,7 +585,7 @@ func (c *ClientConn) preHandleShard(sql string) (bool, error) {
 }
 
 func (c *ClientConn) handleExec(stmt sqlparser.Statement, args []interface{}) error {
-	//获取分表执行计划
+	//构建分表执行计划
 	plan, err := c.schema.rule.BuildPlan(stmt)
 	if err != nil {
 		return err
