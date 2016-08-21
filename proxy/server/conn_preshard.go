@@ -63,7 +63,6 @@ func (c *ClientConn) preHandleShard(sql string) (bool, error) {
 		}
 	}
 
-	//TODO 没看懂
 	tokens := strings.FieldsFunc(sql, hack.IsSqlSep)
 
 	if len(tokens) == 0 {
@@ -87,16 +86,19 @@ func (c *ClientConn) preHandleShard(sql string) (bool, error) {
 		}
 		return false, err
 	}
+
 	//need shard sql
 	if executeDB == nil {
 		return false, nil
 	}
+
 	//get connection in DB
 	conn, err := c.getBackendConn(executeDB.ExecNode, executeDB.IsSlave)
 	defer c.closeConn(conn, false)
 	if err != nil {
 		return false, err
 	}
+	//execute sql in one node
 	rs, err = c.executeInNode(conn, sql, nil)
 	if err != nil {
 		return false, err
@@ -146,11 +148,14 @@ func (c *ClientConn) GetTransExecDB(tokens []string, sql string) (*ExecuteDB, er
 		if err != nil {
 			return nil, err
 		}
+		//need shard
 		if executeDB == nil {
 			return nil, nil
 		}
 		return executeDB, nil
 	}
+	//不需要分表且事务涉及到两个节点的sql，则报错
+	//事务集合个数为1，但是又不是当前计算出来的节点，则必然事务操作在两个节点及以上
 	if len(c.txConns) == 1 && c.txConns[executeDB.ExecNode] == nil {
 		return nil, errors.ErrTransInMulti
 	}

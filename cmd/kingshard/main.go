@@ -52,9 +52,8 @@ const banner string = `
 func main() {
 	fmt.Print(banner)
 	runtime.GOMAXPROCS(runtime.NumCPU())
+	//解析入口参数
 	flag.Parse()
-
-	/* TODO 使用指针的方式是出于什么考虑? */
 	fmt.Printf("Git commit:%s\n", hack.Version)
 	fmt.Printf("Build time:%s\n", hack.Compile)
 	if *version {
@@ -65,7 +64,7 @@ func main() {
 		return
 	}
 
-	/* 全局配置 */
+	/* 全局配置文件 */
 	cfg, err := config.ParseConfigFile(*configFile)
 	if err != nil {
 		fmt.Printf("parse config file error:%v\n", err.Error())
@@ -99,8 +98,8 @@ func main() {
 		setLogLevel(cfg.LogLevel)
 	}
 
+	/* 构造全局唯一的server实例，加载配置信息，建立与后端mysql的连接池*/
 	var svr *server.Server
-	/* 构造唯一的server实例，加载配置信息，建立与后端mysql的连接池*/
 	svr, err = server.NewServer(cfg)
 	if err != nil {
 		golog.Error("main", "main", err.Error(), 0)
@@ -119,14 +118,6 @@ func main() {
 
 	/*单独的协程做信号监控*/
 	go func() {
-<<<<<<< HEAD
-		/* 阻塞 */
-		sig := <-sc
-		golog.Info("main", "main", "Got signal", 0, "signal", sig)
-		golog.GlobalSysLogger.Close()
-		golog.GlobalSqlLogger.Close()
-		svr.Close()
-=======
 		for {
 			sig := <-sc
 			if sig == syscall.SIGINT || sig == syscall.SIGTERM || sig == syscall.SIGQUIT {
@@ -134,11 +125,10 @@ func main() {
 				golog.GlobalSysLogger.Close()
 				golog.GlobalSqlLogger.Close()
 				svr.Close()
-			} else if sig == syscall.SIGPIPE {
+			} else if sig == syscall.SIGPIPE { //忽略SIGPIPE信号
 				golog.Info("main", "main", "Ignore broken pipe signal", 0)
 			}
 		}
->>>>>>> 09ed716df0de1f0ec6091638604fab29fece6442
 	}()
 
 	//主程序入口

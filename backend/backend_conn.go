@@ -382,9 +382,9 @@ func (c *Conn) GetAddr() string {
 }
 
 func (c *Conn) Execute(command string, args ...interface{}) (*mysql.Result, error) {
-	if len(args) == 0 {
+	if len(args) == 0 { //非prepare
 		return c.exec(command)
-	} else {
+	} else { //prepare
 		if s, err := c.Prepare(command); err != nil {
 			return nil, err
 		} else {

@@ -122,7 +122,7 @@ func (c *ClientConn) handleQuery(sql string) (err error) {
 	return nil
 }
 
-/* 获取连接的时候设置DB、编码等 */
+/* TODO 每一次获取连接的时候都需要设置DB、编码等，因为连接是复用的,但是这样会增加两次网络交互，因为ks是对应一个schema的，可不可以提前初始化好连接的db信息呢 */
 func (c *ClientConn) getBackendConn(n *backend.Node, fromSlave bool) (co *backend.BackendConn, err error) {
 	/* 如果没有处于事务中 */
 	if !c.isInTransaction() {
@@ -147,16 +147,17 @@ func (c *ClientConn) getBackendConn(n *backend.Node, fromSlave bool) (co *backen
 		var ok bool
 		co, ok = c.txConns[n]
 
+		//第一次获取事务连接
 		if !ok {
 			if co, err = n.GetMasterConn(); err != nil {
 				return
 			}
 
-			if !c.isAutoCommit() {
+			if !c.isAutoCommit() { //通过set autocommit = 0开启事务
 				if err = co.SetAutoCommit(0); err != nil {
 					return
 				}
-			} else {
+			} else { //通过begin开启事务
 				if err = co.Begin(); err != nil {
 					return
 				}
@@ -171,7 +172,7 @@ func (c *ClientConn) getBackendConn(n *backend.Node, fromSlave bool) (co *backen
 		return
 	}
 
-	/* 使用后端连接字符集 */
+	/* 设置后端连接字符集 */
 	if err = co.SetCharset(c.charset); err != nil {
 		return
 	}
@@ -219,7 +220,7 @@ func (c *ClientConn) executeInNode(conn *backend.BackendConn, sql string, args [
 	var state string
 
 	startTime := time.Now().UnixNano()
-	/* 根据mysql通讯协议，向后端传输并执行sql语句，并获取执行结果 */
+	/* 根据mysql通讯协议，向后端传输sql语句或者prepare的方式，并获取执行结果 */
 	r, err := conn.Execute(sql, args...)
 	if err != nil {
 		state = "ERROR"

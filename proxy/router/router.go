@@ -117,7 +117,7 @@ func NewRouter(schemaConfig *config.SchemaConfig) (*Router, error) {
 	rt.Rules = make(map[string]*Rule, len(schemaConfig.ShardRule)) //对应schema中的shard
 	rt.DefaultRule = NewDefaultRule(rt.DB, schemaConfig.Default)   //对应schema中的default
 
-	/* 遍历shard,检查配置信息 */
+	/* 遍历shard,获取每个分表配置信息 */
 	for _, shard := range schemaConfig.ShardRule {
 		for _, node := range shard.Nodes {
 			/* 检查shard中的节点是否包含在schema中的节点内 */
@@ -126,6 +126,7 @@ func NewRouter(schemaConfig *config.SchemaConfig) (*Router, error) {
 					shard.Table, node, strings.Join(shard.Nodes, ","))
 			}
 		}
+		//解析分表规则
 		rule, err := parseRule(rt.DB, &shard)
 		if err != nil {
 			return nil, err
@@ -176,8 +177,8 @@ func parseRule(db string, cfg *config.ShardConfig) (*Rule, error) {
 		if len(cfg.Locations) != len(r.Nodes) {
 			return nil, errors.ErrLocationsCount
 		}
-		for i := 0; i < len(cfg.Locations); i++ {
-			for j := 0; j < cfg.Locations[i]; j++ {
+		for i := 0; i < len(cfg.Locations); i++ { //子表分组
+			for j := 0; j < cfg.Locations[i]; j++ { //每个分组子表个数
 				r.SubTableIndexs = append(r.SubTableIndexs, j+sumTables)
 				r.TableToNode[j+sumTables] = i //建立表下标到节点下标的映射关系,都是从0下标开始
 			}
@@ -227,6 +228,7 @@ func parseRule(db string, cfg *config.ShardConfig) (*Rule, error) {
 		}
 	}
 
+	//获取hash、range计算基数，并获取分表计算对应的handler
 	if err := parseShard(r, cfg); err != nil {
 		return nil, err
 	}
@@ -241,8 +243,10 @@ func parseRule(db string, cfg *config.ShardConfig) (*Rule, error) {
 func parseShard(r *Rule, cfg *config.ShardConfig) error {
 	switch r.Type {
 	case HashRuleType:
+		//hash基数下标即为子表个数
 		r.Shard = &HashShard{ShardNum: len(r.TableToNode)}
 	case RangeRuleType:
+		//range计算每个分表的分区间对应的数值范围
 		rs, err := ParseNumSharding(cfg.Locations, cfg.TableRowLimit)
 		if err != nil {
 			return err
@@ -369,7 +373,7 @@ func (r *Router) buildInsertPlan(statement sqlparser.Statement) (*Plan, error) {
 
 	plan.Criteria = plan.checkValuesType(stmt.Rows.(sqlparser.Values))
 
-	/* 计算分表目标表下标、节点下标 */
+	/* TODO 没有看明白 计算分表目标表下标、节点下标 */
 	err := plan.calRouteIndexs()
 	if err != nil {
 		golog.Error("Route", "BuildInsertPlan", err.Error(), 0)

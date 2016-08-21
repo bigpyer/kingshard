@@ -621,8 +621,6 @@ func (s *Server) handleSaveProxyConfig() error {
 func (s *Server) Run() error {
 	s.running = true
 
-	/* 没有收到退出信号时 */
-	// flush counter
 	go s.flushCounter()
 
 	for s.running {

@@ -293,7 +293,7 @@ func (plan *Plan) calRouteIndexs() error {
 		plan.RouteNodeIndexs = []int{0}
 		return nil
 	}
-	if plan.Criteria == nil { //如果没有分表条件，则是全子表扫描
+	if plan.Criteria == nil { //如果没有分表条件且不是DefaultRuleType，则报错
 		if plan.Rule.Type != DefaultRuleType {
 			golog.Error("Plan", "calRouteIndexs", "plan have no criteria", 0,
 				"type", plan.Rule.Type)
@@ -303,6 +303,7 @@ func (plan *Plan) calRouteIndexs() error {
 
 	switch criteria := plan.Criteria.(type) {
 	case sqlparser.Values: //代表insert中values
+		//获取表下标
 		plan.RouteTableIndexs, err = plan.getInsertTableIndex(criteria)
 		if err != nil {
 			return err

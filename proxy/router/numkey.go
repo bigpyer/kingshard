@@ -72,8 +72,8 @@ func ParseDayRange(dateRange string) ([]int, error) {
 	dateDays := make([]int, 0)
 	dateLength := 8
 
-	//只有一天的场景
 	dateTmp := strings.SplitN(dateRange, "-", 2)
+	//只有一天
 	if len(dateTmp) == 1 {
 		if len(dateTmp[0]) != dateLength {
 			return nil, errors.ErrDateRangeIllegal
@@ -130,6 +130,7 @@ func ParseMonthRange(dateRange string) ([]int, error) {
 	dateLength := 6
 
 	dateTmp := strings.SplitN(dateRange, "-", 2)
+	//一个月
 	if len(dateTmp) == 1 {
 		if len(dateTmp[0]) != dateLength {
 			return nil, errors.ErrDateRangeIllegal
@@ -179,6 +180,7 @@ func ParseMonthRange(dateRange string) ([]int, error) {
 
 		//将月转化为数字
 		monthNum := beginYear*100 + monthTmp
+		//结果是一个由月份组成的数组
 		dateMonth = append(dateMonth, monthNum)
 		monthTmp++
 	}
