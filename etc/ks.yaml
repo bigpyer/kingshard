@@ -7,7 +7,7 @@ password : kingshard
 
 # if set log_path, the sql log will write into log_path/sql.log,the system log
 # will write into log_path/sys.log
-#log_path : /Users/flike/log
+log_path : ./logs
 
 # log level[debug|info|warn|error],default error
 log_level : debug
@@ -32,17 +32,17 @@ log_sql: on
 # node is an agenda for real remote mysql server.
 nodes :
 - 
-    name : 127.0.0.1@user
+    name : node1 
 
     # default max conns for mysql server
     max_conns_limit : 32
 
     # all mysql in a node must have the same user and password
-    user :  root 
-    password : root
+    user :  kingshard 
+    password : kingshard
 
     # master represents a real mysql master server 
-    master : 127.0.0.1:3307
+    master : 127.0.0.1:3306
 
     # slave represents a real mysql salve server,and the number after '@' is 
     # read load weight of this slave.
@@ -55,11 +55,11 @@ nodes :
     max_conns_limit : 32
 
     # all mysql in a node must have the same user and password
-    user :  root 
-    password : root
+    user :  kingshard 
+    password : kingshard
 
     # master represents a real mysql master server 
-    master : 127.0.0.1:3309
+    master : 127.0.0.1:3307
 
     # slave represents a real mysql salve server 
     slave : 
@@ -71,7 +71,7 @@ nodes :
 # schema defines sharding rules, the db is the sharding table database.
 schema :
     db : kingshard
-    nodes: [127.0.0.1@user,node2]
+    nodes: [node1,node2]
     default: node1      
     shard:
     -   

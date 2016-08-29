@@ -279,8 +279,9 @@ func (db *DB) GetConnFromCache(cacheConns chan *Conn) *Conn {
 	var co *Conn
 	var err error
 	for 0 < len(cacheConns) {
+		//从channel中获取连接
 		co = <-cacheConns
-		//取出连接、进行存活检查
+		//如果保活检测时间小于当前时间间隔，则强制进行存活检测
 		if co != nil && PingPeroid < time.Now().Unix()-co.pushTimestamp {
 			err = co.Ping()
 			if err != nil {
