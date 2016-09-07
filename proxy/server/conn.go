@@ -222,12 +222,12 @@ func (c *ClientConn) readHandshakeResponse() error {
 	//skip reserved 23[00]
 	pos += 23
 
-	//user name
+	//user name,Null-Terminated String
 	c.user = string(data[pos : pos+bytes.IndexByte(data[pos:], 0)])
 
 	pos += len(c.user) + 1
 
-	//auth length and auth
+	//auth length and auth,Length Coded Binary
 	authLen := int(data[pos])
 	pos++
 	auth := data[pos : pos+authLen]
@@ -252,6 +252,7 @@ func (c *ClientConn) readHandshakeResponse() error {
 			return nil
 		}
 
+		//Null-Terminated String
 		db = string(data[pos : pos+bytes.IndexByte(data[pos:], 0)])
 		pos += len(c.db) + 1
 
@@ -313,7 +314,9 @@ func (c *ClientConn) Run() {
 
 func (c *ClientConn) dispatch(data []byte) error {
 	c.proxy.counter.IncrClientQPS()
+	//1Byte 命令
 	cmd := data[0]
+	//nByte 参数
 	data = data[1:]
 
 	switch cmd {
@@ -330,6 +333,7 @@ func (c *ClientConn) dispatch(data []byte) error {
 		return c.writeOK(nil)
 		/* 切换数据库 */
 	case mysql.COM_INIT_DB:
+		//Null-Terminated String
 		return c.handleUseDB(hack.String(data))
 		/* 获取数据库字段信息,等同于show fields from table */
 	case mysql.COM_FIELD_LIST:
