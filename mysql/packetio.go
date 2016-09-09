@@ -98,6 +98,7 @@ func (p *PacketIO) WritePacket(data []byte) error {
 
 		data[3] = p.Sequence
 
+		//数据长度
 		if n, err := p.wb.Write(data[:4+MaxPayloadLen]); err != nil {
 			return ErrBadConn
 		} else if n != (4 + MaxPayloadLen) {
@@ -114,6 +115,7 @@ func (p *PacketIO) WritePacket(data []byte) error {
 	data[2] = byte(length >> 16)
 	data[3] = p.Sequence
 
+	//数据内容
 	if n, err := p.wb.Write(data); err != nil {
 		return ErrBadConn
 	} else if n != len(data) {
