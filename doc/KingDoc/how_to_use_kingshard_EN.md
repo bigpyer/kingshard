@@ -20,6 +20,11 @@ kingshard run with a configuration file (ks.yaml). Before running kingshard, the
 ```
 # server listen addr
 addr : 0.0.0.0:9696
+# the web api server
+web_addr : 0.0.0.0:9797
+#HTTP Basic Auth
+web_user : admin
+web_password : admin
 
 # server user and password
 user :  kingshard
@@ -82,13 +87,13 @@ nodes :
     # 0 will no down
     down_after_noalive: 32
 
-# schema defines which db can be used by client and this db's sql will be executed in which nodes, the db is also the default database
+# schema defines which db can be used by client and this db's sql will be executed in which nodes
 schema :
-    db : kingshard
     nodes: [node1,node2]
     default: node1      
     shard:
     -   
+        db : kingshard
         table: test_shard_hash
         key: id
         nodes: [node1, node2]
@@ -96,6 +101,7 @@ schema :
         locations: [4,4]
 
     -   
+        db : kingshard
         table: test_shard_range
         key: id
         type: range

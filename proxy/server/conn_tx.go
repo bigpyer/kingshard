@@ -30,6 +30,11 @@ func (c *ClientConn) isAutoCommit() bool {
 
 /* 更新客户端连接状态为事务中 */
 func (c *ClientConn) handleBegin() error {
+	for _, co := range c.txConns {
+		if err := co.Begin(); err != nil {
+			return err
+		}
+	}
 	c.status |= mysql.SERVER_STATUS_IN_TRANS
 	return c.writeOK(nil)
 }

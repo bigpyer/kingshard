@@ -76,14 +76,16 @@ func (c *ClientConn) handleStmtPrepare(sql string) error {
 
 	n := c.proxy.GetNode(defaultRule.Nodes[0])
 
-	co, err := n.GetMasterConn()
+	co, err := c.getBackendConn(n, false)
 	defer c.closeConn(co, false)
 	if err != nil {
 		return fmt.Errorf("prepare error %s", err)
 	}
 
-	err = co.UseDB(c.schema.db)
+	err = co.UseDB(c.db)
 	if err != nil {
+		//reset the database to null
+		c.db = ""
 		return fmt.Errorf("prepare error %s", err)
 	}
 

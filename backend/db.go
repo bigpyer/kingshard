@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/flike/kingshard/core/errors"
+	"github.com/flike/kingshard/core/golog"
 	"github.com/flike/kingshard/mysql"
 )
 
@@ -48,6 +49,7 @@ type DB struct {
 	idleConns   chan *Conn
 	cacheConns  chan *Conn
 	checkConn   *Conn
+	lastPing    int64
 }
 
 func Open(addr string, user string, password string, dbName string, maxConnNum int) (*DB, error) {
@@ -102,6 +104,7 @@ func Open(addr string, user string, password string, dbName string, maxConnNum i
 			db.idleConns <- conn
 		}
 	}
+	db.SetLastPing()
 
 	return db, nil
 }
@@ -241,7 +244,7 @@ func (db *DB) tryReuse(co *Conn) error {
 	//connection may be set names early
 	//we must use default utf8
 	if co.GetCharset() != mysql.DEFAULT_CHARSET {
-		err = co.SetCharset(mysql.DEFAULT_CHARSET)
+		err = co.SetCharset(mysql.DEFAULT_CHARSET, mysql.DEFAULT_COLLATION_ID)
 		if err != nil {
 			return err
 		}
@@ -319,6 +322,14 @@ func (db *DB) GetConnFromIdle(cacheConns, idleConns chan *Conn) (*Conn, error) {
 				return nil, errors.ErrBadConn
 			}
 		}
+	default:
+		//new connection
+		golog.Error("db.go", "GetConnFromIdle", "Get conn in default", 0)
+		err = co.Connect(db.addr, db.user, db.password, db.db)
+		if err != nil {
+			db.closeConn(co)
+			return nil, err
+		}
 	}
 	return co, nil
 }
@@ -371,4 +382,12 @@ func (db *DB) GetConn() (*BackendConn, error) {
 		return nil, err
 	}
 	return &BackendConn{c, db}, nil
+}
+
+func (db *DB) SetLastPing() {
+	db.lastPing = time.Now().Unix()
+}
+
+func (db *DB) GetLastPing() int64 {
+	return db.lastPing
 }

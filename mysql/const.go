@@ -175,6 +175,7 @@ var (
 	TK_ID_START       = 12
 	TK_ID_TRANSACTION = 13
 	TK_ID_SHOW        = 14
+	TK_ID_TRUNCATE    = 15
 
 	PARSE_TOKEN_MAP = map[string]int{
 		"insert":      TK_ID_INSERT,
@@ -191,19 +192,24 @@ var (
 		"start":       TK_ID_START,
 		"transaction": TK_ID_TRANSACTION,
 		"show":        TK_ID_SHOW,
+		"truncate":    TK_ID_TRUNCATE,
 	}
 	// '*'
 	COMMENT_PREFIX uint8 = 42
 	COMMENT_STRING       = "*"
 
 	//
-	TK_STR_FROM = "from"
-	TK_STR_INTO = "into"
-	TK_STR_SET  = "set"
+	TK_STR_SELECT = "select"
+	TK_STR_FROM   = "from"
+	TK_STR_INTO   = "into"
+	TK_STR_SET    = "set"
 
 	TK_STR_TRANSACTION    = "transaction"
 	TK_STR_LAST_INSERT_ID = "last_insert_id()"
 	TK_STR_MASTER_HINT    = "*master*"
+	//show
+	TK_STR_COLUMNS = "columns"
+	TK_STR_FIELDS  = "fields"
 
 	SET_KEY_WORDS = map[string]struct{}{
 		"names": struct{}{},

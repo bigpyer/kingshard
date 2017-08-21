@@ -49,15 +49,14 @@ type Rule struct {
 }
 
 type Router struct {
-	DB          string
-	Rules       map[string]*Rule //key is <table name>
+	//map[db]map[table_name]*Rule
+	Rules       map[string]map[string]*Rule
 	DefaultRule *Rule
 	Nodes       []string //just for human saw
 }
 
-func NewDefaultRule(db string, node string) *Rule {
+func NewDefaultRule(node string) *Rule {
 	var r *Rule = &Rule{
-		DB:          db,
 		Type:        DefaultRuleType,
 		Nodes:       []string{node},
 		Shard:       new(DefaultShard),
@@ -103,70 +102,77 @@ func (r *Rule) checkUpdateExprs(exprs sqlparser.UpdateExprs) error {
 	return nil
 }
 
-//build router according to the config file
+//NewRouter build router according to the config file
 func NewRouter(schemaConfig *config.SchemaConfig) (*Router, error) {
 	/* 检查分表的default node是否包含在nodes节点中 */
 	if !includeNode(schemaConfig.Nodes, schemaConfig.Default) {
-		return nil, fmt.Errorf("default node[%s] not in the nodes list.",
+		return nil, fmt.Errorf("default node[%s] not in the nodes list",
 			schemaConfig.Default)
 	}
 
 	rt := new(Router)
-	rt.DB = schemaConfig.DB                                        //对应schema中的db
-	rt.Nodes = schemaConfig.Nodes                                  //对应schema中的nodes
-	rt.Rules = make(map[string]*Rule, len(schemaConfig.ShardRule)) //对应schema中的shard
-	rt.DefaultRule = NewDefaultRule(rt.DB, schemaConfig.Default)   //对应schema中的default
+	rt.Nodes = schemaConfig.Nodes //对应schema中的nodes
+	rt.Rules = make(map[string]map[string]*Rule)
+	rt.DefaultRule = NewDefaultRule(schemaConfig.Default)
 
 	/* 遍历shard,获取每个分表配置信息 */
 	for _, shard := range schemaConfig.ShardRule {
 		for _, node := range shard.Nodes {
 			/* 检查shard中的节点是否包含在schema中的节点内 */
 			if !includeNode(rt.Nodes, node) {
-				return nil, fmt.Errorf("shard table[%s] node[%s] not in the schema.nodes list:[%s].",
+				return nil, fmt.Errorf("shard table[%s] node[%s] not in the schema.nodes list:[%s]",
 					shard.Table, node, strings.Join(shard.Nodes, ","))
 			}
 		}
 		//解析分表规则
-		rule, err := parseRule(rt.DB, &shard)
+		rule, err := parseRule(&shard)
 		if err != nil {
 			return nil, err
 		}
 
 		/* DefaultRuleType='default' */
 		if rule.Type == DefaultRuleType {
-			return nil, fmt.Errorf("[default-rule] duplicate, must only one.")
-		} else {
-			if _, ok := rt.Rules[rule.Table]; ok {
+			return nil, fmt.Errorf("[default-rule] duplicate, must only one")
+		}
+		//if the database exist in rules
+		if _, ok := rt.Rules[rule.DB]; ok {
+			if _, ok := rt.Rules[rule.DB][rule.Table]; ok {
 				return nil, fmt.Errorf("table %s rule in %s duplicate", rule.Table, rule.DB)
+			} else {
+				rt.Rules[rule.DB][rule.Table] = rule
 			}
-			/* 以表名称为key，加载对应的分表规则 */
-			rt.Rules[rule.Table] = rule
+		} else {
+			m := make(map[string]*Rule)
+			/* 以库名+表名为key，加载对应的分表规则 */
+			rt.Rules[rule.DB] = m
+			rt.Rules[rule.DB][rule.Table] = rule
 		}
 	}
 	return rt, nil
 }
 
-func (r *Router) GetRule(table string) *Rule {
+func (r *Router) GetRule(db, table string) *Rule {
 	arry := strings.Split(table, ".")
 	if len(arry) == 2 {
-		if strings.Trim(arry[0], "`") == r.DB {
-			table = strings.Trim(arry[1], "`")
-		}
+		table = strings.Trim(arry[1], "`")
+		db = strings.Trim(arry[0], "`")
 	}
-	rule := r.Rules[table]
+	rule := r.Rules[db][table]
 	if rule == nil {
+		//set the database of default rule
+		r.DefaultRule.DB = db
 		return r.DefaultRule
 	} else {
 		return rule
 	}
 }
 
-//计算分表规则
-func parseRule(db string, cfg *config.ShardConfig) (*Rule, error) {
+//解析分表规则
+func parseRule(cfg *config.ShardConfig) (*Rule, error) {
 	r := new(Rule)
-	r.DB = db
+	r.DB = cfg.DB
 	r.Table = cfg.Table
-	r.Key = cfg.Key
+	r.Key = strings.ToLower(cfg.Key) //ignore case
 	r.Type = cfg.Type
 	r.Nodes = cfg.Nodes //将ruleconfig中的nodes赋值给rule
 	r.TableToNode = make(map[int]int, 0)
@@ -280,24 +286,26 @@ func includeNode(nodes []string, node string) bool {
 }
 
 //build a router plan
-func (r *Router) BuildPlan(statement sqlparser.Statement) (*Plan, error) {
+func (r *Router) BuildPlan(db string, statement sqlparser.Statement) (*Plan, error) {
 	//因为实现Statement接口的方法都是指针类型，所以type对应类型也是指针类型
 	switch stmt := statement.(type) {
 	case *sqlparser.Insert:
-		return r.buildInsertPlan(stmt)
+		return r.buildInsertPlan(db, stmt)
 	case *sqlparser.Replace:
-		return r.buildReplacePlan(stmt)
+		return r.buildReplacePlan(db, stmt)
 	case *sqlparser.Select:
-		return r.buildSelectPlan(stmt)
+		return r.buildSelectPlan(db, stmt)
 	case *sqlparser.Update:
-		return r.buildUpdatePlan(stmt)
+		return r.buildUpdatePlan(db, stmt)
 	case *sqlparser.Delete:
-		return r.buildDeletePlan(stmt)
+		return r.buildDeletePlan(db, stmt)
+	case *sqlparser.Truncate:
+		return r.buildTruncatePlan(db, stmt)
 	}
 	return nil, errors.ErrNoPlan
 }
 
-func (r *Router) buildSelectPlan(statement sqlparser.Statement) (*Plan, error) {
+func (r *Router) buildSelectPlan(db string, statement sqlparser.Statement) (*Plan, error) {
 	plan := &Plan{}
 	var where *sqlparser.Where
 	var err error
@@ -319,7 +327,7 @@ func (r *Router) buildSelectPlan(statement sqlparser.Statement) (*Plan, error) {
 		tableName = sqlparser.String(v)
 	}
 
-	plan.Rule = r.GetRule(tableName) //根据表名获得分表规则
+	plan.Rule = r.GetRule(db, tableName) //根据表名获得分表规则
 	where = stmt.Where
 
 	if where != nil {
@@ -347,7 +355,7 @@ func (r *Router) buildSelectPlan(statement sqlparser.Statement) (*Plan, error) {
 	return plan, nil
 }
 
-func (r *Router) buildInsertPlan(statement sqlparser.Statement) (*Plan, error) {
+func (r *Router) buildInsertPlan(db string, statement sqlparser.Statement) (*Plan, error) {
 	plan := &Plan{}
 	plan.Rows = make(map[int]sqlparser.Values)
 	stmt := statement.(*sqlparser.Insert)
@@ -359,8 +367,8 @@ func (r *Router) buildInsertPlan(statement sqlparser.Statement) (*Plan, error) {
 		return nil, errors.ErrIRNoColumns
 	}
 
-	//根据sql语句中的表，获得对应的分片规则
-	plan.Rule = r.GetRule(sqlparser.String(stmt.Table))
+	//根据sql语句的表，获得对应的分片规则
+	plan.Rule = r.GetRule(db, sqlparser.String(stmt.Table))
 
 	/* TODO OnDup含义 */
 	if stmt.OnDup != nil {
@@ -371,7 +379,11 @@ func (r *Router) buildInsertPlan(statement sqlparser.Statement) (*Plan, error) {
 		}
 	}
 
-	plan.Criteria = plan.checkValuesType(stmt.Rows.(sqlparser.Values))
+	plan.Criteria, err = plan.checkValuesType(stmt.Rows.(sqlparser.Values))
+	if err != nil {
+		golog.Error("router", "buildInsertPlan", err.Error(), 0, "sql", sqlparser.String(statement))
+		return nil, err
+	}
 
 	/* TODO 没有看明白 计算分表目标表下标、节点下标 */
 	err := plan.calRouteIndexs()
@@ -388,12 +400,12 @@ func (r *Router) buildInsertPlan(statement sqlparser.Statement) (*Plan, error) {
 	return plan, nil
 }
 
-func (r *Router) buildUpdatePlan(statement sqlparser.Statement) (*Plan, error) {
+func (r *Router) buildUpdatePlan(db string, statement sqlparser.Statement) (*Plan, error) {
 	plan := &Plan{}
 	var where *sqlparser.Where
 
 	stmt := statement.(*sqlparser.Update)
-	plan.Rule = r.GetRule(sqlparser.String(stmt.Table))
+	plan.Rule = r.GetRule(db, sqlparser.String(stmt.Table))
 	err := plan.Rule.checkUpdateExprs(stmt.Exprs)
 	if err != nil {
 		return nil, err
@@ -425,13 +437,13 @@ func (r *Router) buildUpdatePlan(statement sqlparser.Statement) (*Plan, error) {
 	return plan, nil
 }
 
-func (r *Router) buildDeletePlan(statement sqlparser.Statement) (*Plan, error) {
+func (r *Router) buildDeletePlan(db string, statement sqlparser.Statement) (*Plan, error) {
 	plan := &Plan{}
 	var where *sqlparser.Where
 	var err error
 
 	stmt := statement.(*sqlparser.Delete)
-	plan.Rule = r.GetRule(sqlparser.String(stmt.Table))
+	plan.Rule = r.GetRule(db, sqlparser.String(stmt.Table))
 	where = stmt.Where
 
 	if where != nil {
@@ -459,7 +471,29 @@ func (r *Router) buildDeletePlan(statement sqlparser.Statement) (*Plan, error) {
 	return plan, nil
 }
 
-func (r *Router) buildReplacePlan(statement sqlparser.Statement) (*Plan, error) {
+func (r *Router) buildTruncatePlan(db string, statement sqlparser.Statement) (*Plan, error) {
+	plan := &Plan{}
+	var err error
+
+	stmt := statement.(*sqlparser.Truncate)
+	plan.Rule = r.GetRule(db, sqlparser.String(stmt.Table))
+	//send to all nodes and all tables
+	plan.RouteTableIndexs = plan.Rule.SubTableIndexs
+	plan.RouteNodeIndexs = makeList(0, len(plan.Rule.Nodes))
+
+	if plan.Rule.Type != DefaultRuleType && len(plan.RouteTableIndexs) == 0 {
+		golog.Error("Route", "buildTruncatePlan", errors.ErrNoCriteria.Error(), 0)
+		return nil, errors.ErrNoCriteria
+	}
+	//generate sql,如果routeTableindexs为空则表示不分表，不分表则发default node
+	err = r.generateTruncateSql(plan, stmt)
+	if err != nil {
+		return nil, err
+	}
+	return plan, nil
+}
+
+func (r *Router) buildReplacePlan(db string, statement sqlparser.Statement) (*Plan, error) {
 	plan := &Plan{}
 	plan.Rows = make(map[int]sqlparser.Values)
 
@@ -472,14 +506,18 @@ func (r *Router) buildReplacePlan(statement sqlparser.Statement) (*Plan, error) 
 		return nil, errors.ErrIRNoColumns
 	}
 
-	plan.Rule = r.GetRule(sqlparser.String(stmt.Table))
+	plan.Rule = r.GetRule(db, sqlparser.String(stmt.Table))
 
 	err := plan.GetIRKeyIndex(stmt.Columns)
 	if err != nil {
 		return nil, err
 	}
 
-	plan.Criteria = plan.checkValuesType(stmt.Rows.(sqlparser.Values))
+	plan.Criteria, err = plan.checkValuesType(stmt.Rows.(sqlparser.Values))
+	if err != nil {
+		golog.Error("router", "buildReplacePlan", err.Error(), 0, "sql", sqlparser.String(statement))
+		return nil, err
+	}
 
 	err = plan.calRouteIndexs()
 	if err != nil {
@@ -815,6 +853,44 @@ func (r *Router) generateReplaceSql(plan *Plan, stmt sqlparser.Statement) error 
 				plan.Rows[tableIndex],
 			)
 
+			if _, ok := sqls[nodeName]; ok == false {
+				sqls[nodeName] = make([]string, 0, tableCount)
+			}
+			sqls[nodeName] = append(sqls[nodeName], buf.String())
+		}
+
+	}
+	plan.RewrittenSqls = sqls
+	return nil
+}
+
+func (r *Router) generateTruncateSql(plan *Plan, stmt sqlparser.Statement) error {
+	sqls := make(map[string][]string)
+	node, ok := stmt.(*sqlparser.Truncate)
+	if ok == false {
+		return errors.ErrStmtConvert
+	}
+	if len(plan.RouteNodeIndexs) == 0 {
+		return errors.ErrNoRouteNode
+	}
+	if len(plan.RouteTableIndexs) == 0 {
+		buf := sqlparser.NewTrackedBuffer(nil)
+		stmt.Format(buf)
+		nodeName := r.Nodes[0]
+		sqls[nodeName] = []string{buf.String()}
+	} else {
+		tableCount := len(plan.RouteTableIndexs)
+		for i := 0; i < tableCount; i++ {
+			buf := sqlparser.NewTrackedBuffer(nil)
+			buf.Fprintf("truncate %v%s%v",
+				node.Comments,
+				node.TableOpt,
+				node.Table,
+			)
+			fmt.Fprintf(buf, "_%04d", plan.RouteTableIndexs[i])
+			tableIndex := plan.RouteTableIndexs[i]
+			nodeIndex := plan.Rule.TableToNode[tableIndex]
+			nodeName := r.Nodes[nodeIndex]
 			if _, ok := sqls[nodeName]; ok == false {
 				sqls[nodeName] = make([]string, 0, tableCount)
 			}

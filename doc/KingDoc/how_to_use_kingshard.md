@@ -27,6 +27,11 @@ addr : 0.0.0.0:9696
 # 连接kingshard的用户名和密码
 user :  kingshard
 password : kingshard
+#kingshard的web API 端口
+web_addr : 0.0.0.0:9797
+#调用API的用户名和密码
+web_user : admin
+web_password : admin
 
 # log级别，[debug|info|warn|error],默认是error
 log_level : debug
@@ -76,15 +81,15 @@ nodes :
 
 # 分表规则
 schema :
-    #分表使用的db，所有的分表必须都在这个db中。
-    db : kingshard
     #分表分布的node名字
     nodes: [node1,node2]
 	#所有未分表的SQL，都会发往默认node。
     default: node1
     shard:
     -
-        #分表名字
+        #分表使用的db
+        db : kingshard
+		#分表名字
         table: test_shard_hash
         #分表字段
         key: id
@@ -97,7 +102,9 @@ schema :
         locations: [4,4]
 
     -
-		#分表名字
+		#分表使用的db
+        db : kingshard
+        #分表名字
         table: test_shard_range
 	    #分表字段
         key: id

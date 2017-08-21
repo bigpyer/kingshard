@@ -87,6 +87,11 @@
     # server user and password
     user :  kingshard
     password : kingshard
+	# the web api server
+    web_addr : 0.0.0.0:9797
+    #HTTP Basic Auth
+    web_user : admin
+    web_password : admin
 
     # log level[debug|info|warn|error],default error
     log_level : debug
@@ -135,17 +140,18 @@
 
     # schema defines which db can be used by client and this db's sql will be executed in which nodes
     schema :
-        db : kingshard
         nodes: [node1,node2]
 		default: node1
         shard:
         -   
+            db : kingshard
             table: test_shard_hash
             key: id
             nodes: [node1, node2]
             type: hash
             locations: [4,4]
         -   
+            db : kingshard
             table: test_shard_range
             key: id
             type: range

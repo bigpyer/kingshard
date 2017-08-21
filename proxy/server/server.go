@@ -36,11 +36,8 @@ import (
 )
 
 type Schema struct {
-	db string
-
 	nodes map[string]*backend.Node
-
-	rule *router.Router
+	rule  *router.Router
 }
 
 type BlacklistSqls struct {
@@ -59,7 +56,7 @@ type Server struct {
 	addr     string
 	user     string
 	password string
-	db       string
+	//db       string
 
 	statusIndex        int32
 	status             [2]int32
@@ -113,7 +110,7 @@ func (s *Server) parseAllowIps() error {
 	return nil
 }
 
-//TODO parse the blacklist sql file
+//parse the blacklist sql file
 func (s *Server) parseBlackListSqls() error {
 	bs := new(BlacklistSqls)
 	bs.sqls = make(map[string]string)
@@ -129,6 +126,11 @@ func (s *Server) parseBlackListSqls() error {
 			line, err := rd.ReadString('\n')
 			//end of file
 			if err == io.EOF {
+				if len(line) != 0 {
+					fingerPrint := mysql.GetFingerprint(line)
+					md5 := mysql.GetMd5(fingerPrint)
+					bs.sqls[md5] = fingerPrint
+				}
 				break
 			}
 			if err != nil {
@@ -184,7 +186,7 @@ func (s *Server) parseNodes() error {
 	for _, v := range cfg.Nodes {
 		/* 不允许有同名node */
 		if _, ok := s.nodes[v.Name]; ok {
-			return fmt.Errorf("duplicate node [%s].", v.Name)
+			return fmt.Errorf("duplicate node [%s]", v.Name)
 		}
 
 		/* 解析节点集内的节点，建立ks与节点内实例的连接池，建立节点保活goroutine */
@@ -203,19 +205,19 @@ func (s *Server) parseNodes() error {
 func (s *Server) parseSchema() error {
 	schemaCfg := s.cfg.Schema
 	if len(schemaCfg.Nodes) == 0 {
-		return fmt.Errorf("schema [%s] must have a node.", schemaCfg.DB)
+		return fmt.Errorf("schema must have a node")
 	}
 
 	nodes := make(map[string]*backend.Node)
 	for _, n := range schemaCfg.Nodes {
 		/* 检查节点是否存在 */
 		if s.GetNode(n) == nil {
-			return fmt.Errorf("schema [%s] node [%s] config is not exists.", schemaCfg.DB, n)
+			return fmt.Errorf("schema node [%s] config is not exists", n)
 		}
 
 		/* 检查node数组里面是否存在该节点 */
 		if _, ok := nodes[n]; ok {
-			return fmt.Errorf("schema [%s] node [%s] duplicate.", schemaCfg.DB, n)
+			return fmt.Errorf("schema node [%s] duplicate", n)
 		}
 
 		/* 节点集map赋值 */
@@ -229,7 +231,6 @@ func (s *Server) parseSchema() error {
 	}
 
 	s.schema = &Schema{
-		db:    schemaCfg.DB,
 		nodes: nodes,
 		rule:  rule,
 	}
@@ -254,16 +255,18 @@ func NewServer(cfg *config.Config) (*Server, error) {
 	s.logSql[s.logSqlIndex] = cfg.LogSql
 	atomic.StoreInt32(&s.slowLogTimeIndex, 0)
 	s.slowLogTime[s.slowLogTimeIndex] = cfg.SlowLogTime
-	if len(cfg.Charset) != 0 {
-		cid, ok := mysql.CharsetIds[cfg.Charset]
-		if !ok {
-			return nil, errors.ErrInvalidCharset
-		}
-		//change the default charset
-		mysql.DEFAULT_CHARSET = cfg.Charset
-		mysql.DEFAULT_COLLATION_ID = cid
-		mysql.DEFAULT_COLLATION_NAME = mysql.Collations[cid]
+
+	if len(cfg.Charset) == 0 {
+		cfg.Charset = mysql.DEFAULT_CHARSET //utf8
 	}
+	cid, ok := mysql.CharsetIds[cfg.Charset]
+	if !ok {
+		return nil, errors.ErrInvalidCharset
+	}
+	//change the default charset
+	mysql.DEFAULT_CHARSET = cfg.Charset
+	mysql.DEFAULT_COLLATION_ID = cid
+	mysql.DEFAULT_COLLATION_NAME = mysql.Collations[cid]
 
 	//黑名单sql
 	if err := s.parseBlackListSqls(); err != nil {
@@ -394,14 +397,15 @@ func (s *Server) onConn(c net.Conn) {
 	/* mysql握手协议,先要求应用端上送用户名、密码然后校验ks用户名、密码并返回校验结果，握手成功，执行后续命令 */
 	if err := conn.Handshake(); err != nil {
 		golog.Error("server", "onConn", err.Error(), 0)
-		c.Close()
+		conn.writeError(err)
+		conn.Close()
 		return
 	}
 
 	conn.Run()
 }
 
-func (s *Server) changeProxy(v string) error {
+func (s *Server) ChangeProxy(v string) error {
 	var status int32
 	switch v {
 	case "online":
@@ -426,7 +430,11 @@ func (s *Server) changeProxy(v string) error {
 	return nil
 }
 
-func (s *Server) changeLogSql(v string) error {
+func (s *Server) ChangeLogSql(v string) error {
+	v = strings.ToLower(v)
+	if v != golog.LogSqlOn && v != golog.LogSqlOff {
+		return errors.ErrCmdUnsupport
+	}
 	if s.logSqlIndex == 0 {
 		s.logSql[1] = v
 		atomic.StoreInt32(&s.logSqlIndex, 1)
@@ -439,7 +447,7 @@ func (s *Server) changeLogSql(v string) error {
 	return nil
 }
 
-func (s *Server) changeSlowLogTime(v string) error {
+func (s *Server) ChangeSlowLogTime(v string) error {
 	tmp, err := strconv.Atoi(v)
 	if err != nil {
 		return err
@@ -457,7 +465,7 @@ func (s *Server) changeSlowLogTime(v string) error {
 	return err
 }
 
-func (s *Server) addAllowIP(v string) error {
+func (s *Server) AddAllowIP(v string) error {
 	clientIP := net.ParseIP(v)
 
 	for _, ip := range s.allowips[s.allowipsIndex] {
@@ -485,7 +493,7 @@ func (s *Server) addAllowIP(v string) error {
 	return nil
 }
 
-func (s *Server) delAllowIP(v string) error {
+func (s *Server) DelAllowIP(v string) error {
 	clientIP := net.ParseIP(v)
 
 	if s.allowipsIndex == 0 {
@@ -527,7 +535,15 @@ func (s *Server) delAllowIP(v string) error {
 	return nil
 }
 
-func (s *Server) addBlackSql(v string) error {
+func (s *Server) GetAllBlackSqls() []string {
+	blackSQLs := make([]string, 0, 10)
+	for _, SQL := range s.blacklistSqls[s.blacklistSqlsIndex].sqls {
+		blackSQLs = append(blackSQLs, SQL)
+	}
+	return blackSQLs
+}
+
+func (s *Server) AddBlackSql(v string) error {
 	v = strings.TrimSpace(v)
 	fingerPrint := mysql.GetFingerprint(v)
 	md5 := mysql.GetMd5(fingerPrint)
@@ -552,7 +568,7 @@ func (s *Server) addBlackSql(v string) error {
 	return nil
 }
 
-func (s *Server) delBlackSql(v string) error {
+func (s *Server) DelBlackSql(v string) error {
 	v = strings.TrimSpace(v)
 	fingerPrint := mysql.GetFingerprint(v)
 	md5 := mysql.GetMd5(fingerPrint)
@@ -604,7 +620,7 @@ func (s *Server) saveBlackSql() error {
 	return nil
 }
 
-func (s *Server) handleSaveProxyConfig() error {
+func (s *Server) SaveProxyConfig() error {
 	err := config.WriteConfigFile(s.cfg)
 	if err != nil {
 		return err
@@ -646,12 +662,32 @@ func (s *Server) Close() {
 }
 
 func (s *Server) DeleteSlave(node string, addr string) error {
+	addr = strings.Split(addr, backend.WeightSplit)[0]
 	n := s.GetNode(node)
 	if n == nil {
 		return fmt.Errorf("invalid node %s", node)
 	}
 
-	return n.DeleteSlave(addr)
+	if err := n.DeleteSlave(addr); err != nil {
+		return err
+	}
+
+	//sync node slave to global config
+	for i, v1 := range s.cfg.Nodes {
+		if node == v1.Name {
+			s1 := strings.Split(v1.Slave, backend.SlaveSplit)
+			s2 := make([]string, 0, len(s1)-1)
+			for _, v2 := range s1 {
+				hostPort := strings.Split(v2, backend.WeightSplit)[0]
+				if addr != hostPort {
+					s2 = append(s2, v2)
+				}
+			}
+			s.cfg.Nodes[i].Slave = strings.Join(s2, backend.SlaveSplit)
+		}
+	}
+
+	return nil
 }
 
 func (s *Server) AddSlave(node string, addr string) error {
@@ -660,7 +696,20 @@ func (s *Server) AddSlave(node string, addr string) error {
 		return fmt.Errorf("invalid node %s", node)
 	}
 
-	return n.AddSlave(addr)
+	if err := n.AddSlave(addr); err != nil {
+		return err
+	}
+
+	//sync node slave to global config
+	for i, v1 := range s.cfg.Nodes {
+		if v1.Name == node {
+			s1 := strings.Split(v1.Slave, backend.SlaveSplit)
+			s1 = append(s1, addr)
+			s.cfg.Nodes[i].Slave = strings.Join(s1, backend.SlaveSplit)
+		}
+	}
+
+	return nil
 }
 
 func (s *Server) UpMaster(node string, addr string) error {
@@ -701,6 +750,24 @@ func (s *Server) GetNode(name string) *backend.Node {
 	return s.nodes[name]
 }
 
+func (s *Server) GetAllNodes() map[string]*backend.Node {
+	return s.nodes
+}
+
 func (s *Server) GetSchema() *Schema {
 	return s.schema
+}
+
+func (s *Server) GetSlowLogTime() int {
+	return s.slowLogTime[s.slowLogTimeIndex]
+}
+
+func (s *Server) GetAllowIps() []string {
+	var ips []string
+	for _, v := range s.allowips[s.allowipsIndex] {
+		if v != nil {
+			ips = append(ips, v.String())
+		}
+	}
+	return ips
 }

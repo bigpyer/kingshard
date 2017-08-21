@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/flike/kingshard/core/yaml"
+	"gopkg.in/yaml.v2"
 
 	"github.com/flike/kingshard/config"
 	"github.com/flike/kingshard/sqlparser"
@@ -27,17 +27,18 @@ import (
 func TestParseRule(t *testing.T) {
 	var s = `
 schema:
-  db: kingshard
   nodes: [node1, node2, node3]
   default: node1
   shard:
     -
+      db: kingshard
       table: test_shard_hash
       key: id
       nodes: [node2, node3]
       locations: [16,16]
       type: hash
     -
+      db: kingshard
       table: test_shard_range
       key: id
       type: range
@@ -58,7 +59,7 @@ schema:
 		t.Fatal("default rule parse not correct.")
 	}
 
-	hashRule := rt.GetRule("test_shard_hash")
+	hashRule := rt.GetRule("kingshard", "test_shard_hash")
 	if hashRule.Type != HashRuleType {
 		t.Fatal(hashRule.Type)
 	}
@@ -71,7 +72,7 @@ schema:
 		t.Fatal(n)
 	}
 
-	rangeRule := rt.GetRule("test_shard_range")
+	rangeRule := rt.GetRule("kingshard", "test_shard_range")
 	if rangeRule.Type != RangeRuleType {
 		t.Fatal(rangeRule.Type)
 	}
@@ -80,7 +81,7 @@ schema:
 		t.Fatal(n)
 	}
 
-	defaultRule := rt.GetRule("defaultRule_table")
+	defaultRule := rt.GetRule("kingshard", "defaultRule_table")
 	if defaultRule == nil {
 		t.Fatal("must not nil")
 	}
@@ -101,11 +102,11 @@ schema:
 func newTestRouter() *Router {
 	var s = `
 schema :
-  db : kingshard
   nodes: [node1,node2,node3,node4,node5,node6,node7,node8,node9,node10]
   default: node1
   shard:
     -
+      db: kingshard
       table: test1
       key: id
       nodes: [node1,node2,node3]
@@ -113,6 +114,7 @@ schema :
       type: hash
 
     -
+      db: kingshard
       table: test2
       key: id
       type: range
@@ -120,18 +122,21 @@ schema :
       locations: [4,4,4]
       table_row_limit: 10000
     -
+      db: kingshard
       table: test_shard_year
       key: date
       nodes: [node2, node3]
       date_range: [2012-2015,2016-2018]
       type: date_year
     -
+      db: kingshard
       table: test_shard_month
       key: date
       type: date_month
       nodes: [node2, node3]
       date_range: [201512-201603,201604-201608]
     -
+      db: kingshard
       table: test_shard_day
       key: date
       type: date_day
@@ -160,23 +165,25 @@ schema :
 func TestParseDateRule(t *testing.T) {
 	var s = `
 schema:
-  db: kingshard
   nodes: [node1, node2, node3]
   default: node1
   shard:
     -
+      db: kingshard
       table: test_shard_year
       key: date
       nodes: [node2, node3]
       date_range: [2012-2015,2016-2018]
       type: date_year
     -
+      db: kingshard
       table: test_shard_month
       key: date
       type: date_month
       nodes: [node2, node3]
       date_range: [201512-201603,201604-201608]
     -
+      db: kingshard
       table: test_shard_day
       key: date
       type: date_day
@@ -196,7 +203,7 @@ schema:
 		t.Fatal("default rule parse not correct.")
 	}
 
-	yearRule := rt.GetRule("test_shard_year")
+	yearRule := rt.GetRule("kingshard", "test_shard_year")
 	if yearRule.Type != DateYearRuleType {
 		t.Fatal(yearRule.Type)
 	}
@@ -209,7 +216,7 @@ schema:
 		t.Fatal(n)
 	}
 
-	monthRule := rt.GetRule("test_shard_month")
+	monthRule := rt.GetRule("kingshard", "test_shard_month")
 	if monthRule.Type != DateMonthRuleType {
 		t.Fatal(monthRule.Type)
 	}
@@ -218,7 +225,7 @@ schema:
 		t.Fatal(n)
 	}
 
-	dayRule := rt.GetRule("test_shard_day")
+	dayRule := rt.GetRule("kingshard", "test_shard_day")
 	if dayRule.Type != DateDayRuleType {
 		t.Fatal(monthRule.Type)
 	}
@@ -232,11 +239,11 @@ schema:
 func newTestDBRule() *Router {
 	var s = `
 schema :
-  db : kingshard
   nodes: [node1,node2,node3,node4,node5,node6,node7,node8,node9,node10]
   default: node1
   shard:
     -
+      db: kingshard
       table: test1
       key: id
       nodes: [node1,node2,node3]
@@ -244,6 +251,7 @@ schema :
       type: hash
 
     -
+      db: kingshard
       table: test2
       key: id
       type: range
@@ -271,9 +279,9 @@ schema :
 
 func TestBadUpdateExpr(t *testing.T) {
 	var sql string
-
+	var db string
 	r := newTestDBRule()
-
+	db = "kingshard"
 	sql = "insert into test1 (id) values (5) on duplicate key update  id = 10"
 
 	stmt, err := sqlparser.Parse(sql)
@@ -281,7 +289,7 @@ func TestBadUpdateExpr(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	if _, err := r.BuildPlan(stmt); err == nil {
+	if _, err := r.BuildPlan(db, stmt); err == nil {
 		t.Fatal("must err")
 	}
 
@@ -292,7 +300,7 @@ func TestBadUpdateExpr(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	if _, err := r.BuildPlan(stmt); err == nil {
+	if _, err := r.BuildPlan(db, stmt); err == nil {
 		t.Fatal("must err")
 	}
 }
@@ -320,11 +328,12 @@ func isListEqual(l1 []int, l2 []int) bool {
 
 func checkPlan(t *testing.T, sql string, tableIndexs []int, nodeIndexs []int) {
 	r := newTestRouter()
+	db := "kingshard"
 	stmt, err := sqlparser.Parse(sql)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	plan, err := r.BuildPlan(stmt)
+	plan, err := r.BuildPlan(db, stmt)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -344,22 +353,26 @@ func checkPlan(t *testing.T, sql string, tableIndexs []int, nodeIndexs []int) {
 }
 func TestWhereInPartitionByTableIndex(t *testing.T) {
 	var sql string
+	t1 := makeList(0, 12)
+
 	//2016-08-02 13:37:26
 	sql = "select * from test1 where id in (1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22) "
 	checkPlan(t, sql,
-		[]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11},
+		t1,
 		[]int{0, 1, 2},
 	)
 	// ensure no impact for or operator in where
 	sql = "select * from test1 where id in (1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21) or name='test'"
 	checkPlan(t, sql,
-		[]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11},
+		t1,
 		[]int{0, 1, 2},
 	)
 
 	// ensure no impact for not in
 	sql = "select * from test1 where id not in (0,1,2,3,4,5,6,7)"
-	checkPlan(t, sql, []int{8, 9, 10, 11}, []int{2})
+	checkPlan(t, sql,
+		t1,
+		[]int{0, 1, 2})
 
 }
 
@@ -460,7 +473,7 @@ func TestSelectPlan(t *testing.T) {
 	checkPlan(t, sql, t1, []int{0, 1, 2})
 
 	sql = "select * from test1 where id not in (5, 6)"
-	checkPlan(t, sql, []int{0, 1, 2, 3, 4, 7, 8, 9, 10, 11}, []int{0, 1, 2})
+	checkPlan(t, sql, t1, []int{0, 1, 2})
 
 	sql = "select * from test1 where id in (5, 6) or (id in (5, 6, 7,8) and id in (1,5,7))"
 	checkPlan(t, sql, []int{5, 6, 7}, []int{1})

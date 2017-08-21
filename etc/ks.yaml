@@ -5,6 +5,12 @@ addr : 0.0.0.0:9696
 user :  kingshard
 password : kingshard
 
+# the web api server
+web_addr : 0.0.0.0:9797
+#HTTP Basic Auth
+web_user : admin
+web_password : admin
+
 # if set log_path, the sql log will write into log_path/sql.log,the system log
 # will write into log_path/sys.log
 log_path : ./logs
@@ -23,7 +29,7 @@ log_sql: on
 #blacklist_sql_file: /Users/flike/blacklist
 
 # only allow this ip list ip to connect kingshard
-#allow_ips: 127.0.0.1
+allow_ips : 127.0.0.1,192.168.0.14
 
 # the charset of kingshard, if you don't set this item
 # the default charset of kingshard is utf8.
@@ -70,18 +76,26 @@ nodes :
 
 # schema defines sharding rules, the db is the sharding table database.
 schema :
-    db : kingshard
     nodes: [node1,node2]
     default: node1      
     shard:
     -   
+        db : kingshard
         table: test_shard_hash
         key: id
         nodes: [node1, node2]
         type: hash
         locations: [4,4]
 
+    - 
+        db : hidb
+        table: test_hash
+        key: id
+        nodes: [node1, node2]
+        type: hash
+        locations: [4,4]
     -   
+        db : kingshard
         table: test_shard_range
         key: id
         type: range
@@ -89,18 +103,21 @@ schema :
         locations: [4,4]
         table_row_limit: 10000
     -
-        table: test_shard_year
-        key: ctime
-        type: date_year
-        nodes: [node1,node2]
-        date_range: [2015-2016,2017-2018]
+        db : kingshard
+        table: test_shard_time
+        key: id
+        nodes: [node1, node2]
+        type: hash
+        locations: [2,2]
     -
+        db : kingshard
         table: test_shard_month
         key: dtime
         type: date_month
         nodes: [node1,node2]
         date_range: [201603-201605,201609-201612]
     -
+        db : kingshard
         table: test_shard_day
         key: mtime
         type: date_day

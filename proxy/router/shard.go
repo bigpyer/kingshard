@@ -80,8 +80,12 @@ func HashValue(value interface{}) uint64 {
 		return uint64(val)
 	case int64:
 		return uint64(val)
-	case string: //HAHS分表方式支持字符串
-		return uint64(crc32.ChecksumIEEE(hack.Slice(val)))
+	case string: //支持可以转成数字的字符串，即只支持数字
+		if v, err := strconv.ParseUint(val, 10, 64); err != nil {
+			return uint64(crc32.ChecksumIEEE(hack.Slice(val)))
+		} else {
+			return uint64(v)
+		}
 	case []byte:
 		return uint64(crc32.ChecksumIEEE(val))
 	}

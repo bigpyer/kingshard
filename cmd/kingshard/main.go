@@ -28,6 +28,7 @@ import (
 	"github.com/flike/kingshard/core/golog"
 	"github.com/flike/kingshard/core/hack"
 	"github.com/flike/kingshard/proxy/server"
+	"github.com/flike/kingshard/web"
 )
 
 var configFile *string = flag.String("config", "/etc/ks.yaml", "kingshard config file")
@@ -100,11 +101,20 @@ func main() {
 
 	/* 构造全局唯一的server实例，加载配置信息，建立与后端mysql的连接池*/
 	var svr *server.Server
+	var apiSvr *web.ApiServer
 	svr, err = server.NewServer(cfg)
 	if err != nil {
 		golog.Error("main", "main", err.Error(), 0)
 		golog.GlobalSysLogger.Close()
 		golog.GlobalSqlLogger.Close()
+		return
+	}
+	apiSvr, err = web.NewApiServer(cfg, svr)
+	if err != nil {
+		golog.Error("main", "main", err.Error(), 0)
+		golog.GlobalSysLogger.Close()
+		golog.GlobalSqlLogger.Close()
+		svr.Close()
 		return
 	}
 
@@ -132,6 +142,7 @@ func main() {
 	}()
 
 	//主程序入口
+	go apiSvr.Run()
 	svr.Run()
 }
 

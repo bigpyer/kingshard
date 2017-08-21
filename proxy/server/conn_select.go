@@ -55,17 +55,18 @@ func (c *ClientConn) handleFieldList(data []byte) error {
 	}
 
 	/* 获取默认节点 */
-	nodeName := c.schema.rule.GetRule(table).Nodes[0]
+	nodeName := c.schema.rule.GetRule(c.db, table).Nodes[0]
 
 	n := c.proxy.GetNode(nodeName)
-
-	co, err := n.GetMasterConn()
+	co, err := c.getBackendConn(n, false)
 	defer c.closeConn(co, false)
 	if err != nil {
 		return err
 	}
 
 	if err = co.UseDB(c.db); err != nil {
+		//reset the database to null
+		c.db = ""
 		return err
 	}
 
@@ -99,8 +100,8 @@ func (c *ClientConn) writeFieldList(status uint16, fs []*mysql.Field) error {
 func (c *ClientConn) handleSelect(stmt *sqlparser.Select, args []interface{}) error {
 	/* select默认使用从实例 */
 	var fromSlave bool = true
-	/* 根据语句类型，构造执行计划 */
-	plan, err := c.schema.rule.BuildPlan(stmt)
+	/* 根据db、语句，构造执行计划 */
+	plan, err := c.schema.rule.BuildPlan(c.db, stmt)
 	if err != nil {
 		return err
 	}
@@ -715,12 +716,14 @@ func (c *ClientConn) calFuncExprValue(funcName string,
 			return nil, nil
 		}
 		for _, r := range rs {
-			for k := range r.Values {
-				result, err := r.GetInt(k, index)
-				if err != nil {
-					return nil, err
+			if r != nil {
+				for k := range r.Values {
+					result, err := r.GetInt(k, index)
+					if err != nil {
+						return nil, err
+					}
+					num += result
 				}
-				num += result
 			}
 		}
 		return num, nil

@@ -25,6 +25,7 @@ import (
 
 	"github.com/flike/kingshard/core/errors"
 	"github.com/flike/kingshard/core/golog"
+	"github.com/flike/kingshard/core/hack"
 	"github.com/flike/kingshard/mysql"
 	"github.com/flike/kingshard/sqlparser"
 )
@@ -468,7 +469,7 @@ func (c *ClientConn) handleShowNodeConfig() (*mysql.Resultset, error) {
 				node.Master.Addr(),
 				"master",
 				node.Master.State(),
-				fmt.Sprintf("%v", time.Unix(node.LastMasterPing, 0)),
+				fmt.Sprintf("%v", time.Unix(node.Master.GetLastPing(), 0)),
 				strconv.Itoa(node.Cfg.MaxConnNum),
 				strconv.Itoa(node.Master.IdleConnCount()),
 			})
@@ -482,7 +483,7 @@ func (c *ClientConn) handleShowNodeConfig() (*mysql.Resultset, error) {
 						slave.Addr(),
 						"slave",
 						slave.State(),
-						fmt.Sprintf("%v", time.Unix(node.LastSlavePing, 0)),
+						fmt.Sprintf("%v", time.Unix(slave.GetLastPing(), 0)),
 						strconv.Itoa(node.Cfg.MaxConnNum),
 						strconv.Itoa(slave.IdleConnCount()),
 					})
@@ -536,12 +537,12 @@ func (c *ClientConn) handleShowSchemaConfig() (*mysql.Resultset, error) {
 		rows = append(
 			rows,
 			[]string{
-				schemaConfig.DB,
+				r.DB,
 				r.Table,
 				r.Type,
 				r.Key,
 				strings.Join(r.Nodes, ", "),
-				arrayToString(r.Locations),
+				hack.ArrayToString(r.Locations),
 				strconv.Itoa(r.TableRowLimit),
 			},
 		)
@@ -653,38 +654,38 @@ func (c *ClientConn) handleShowBlackSqlConfig() (*mysql.Resultset, error) {
 }
 
 func (c *ClientConn) handleChangeProxy(v string) error {
-	return c.proxy.changeProxy(v)
+	return c.proxy.ChangeProxy(v)
 }
 
 func (c *ClientConn) handleChangeLogSql(v string) error {
-	return c.proxy.changeLogSql(v)
+	return c.proxy.ChangeLogSql(v)
 }
 
 func (c *ClientConn) handleChangeSlowLogTime(v string) error {
-	return c.proxy.changeSlowLogTime(v)
+	return c.proxy.ChangeSlowLogTime(v)
 }
 
 func (c *ClientConn) handleAddAllowIP(v string) error {
 	v = strings.TrimSpace(v)
-	err := c.proxy.addAllowIP(v)
+	err := c.proxy.AddAllowIP(v)
 	return err
 }
 
 func (c *ClientConn) handleDelAllowIP(v string) error {
 	v = strings.TrimSpace(v)
-	err := c.proxy.delAllowIP(v)
+	err := c.proxy.DelAllowIP(v)
 	return err
 }
 
 func (c *ClientConn) handleAddBlackSql(v string) error {
 	v = strings.TrimSpace(v)
-	err := c.proxy.addBlackSql(v)
+	err := c.proxy.AddBlackSql(v)
 	return err
 }
 
 func (c *ClientConn) handleDelBlackSql(v string) error {
 	v = strings.TrimSpace(v)
-	err := c.proxy.delBlackSql(v)
+	err := c.proxy.DelBlackSql(v)
 	return err
 }
 
@@ -693,20 +694,8 @@ func (c *ClientConn) handleAdminSave(k string, v string) error {
 		return errors.ErrCmdUnsupport
 	}
 	if k == ADMIN_PROXY && v == ADMIN_CONFIG {
-		return c.proxy.handleSaveProxyConfig()
+		return c.proxy.SaveProxyConfig()
 	}
 
 	return errors.ErrCmdUnsupport
-}
-
-func arrayToString(array []int) string {
-	if len(array) == 0 {
-		return ""
-	}
-	var strArray []string
-	for _, v := range array {
-		strArray = append(strArray, strconv.FormatInt(int64(v), 10))
-	}
-
-	return strings.Join(strArray, ", ")
 }

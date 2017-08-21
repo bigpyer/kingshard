@@ -18,10 +18,11 @@ import (
 	"sort"
 	"strconv"
 
+	"strings"
+
 	"github.com/flike/kingshard/core/errors"
 	"github.com/flike/kingshard/core/golog"
 	"github.com/flike/kingshard/sqlparser"
-	"strings"
 )
 
 const (
@@ -94,16 +95,10 @@ func (plan *Plan) getHashShardTableIndex(expr sqlparser.BoolExpr) ([]int, error)
 				return nil, err
 			}
 			return []int{index}, nil
-		case "<", "<=", ">", ">=":
+		case "<", "<=", ">", ">=", "not in":
 			return plan.Rule.SubTableIndexs, nil
 		case "in":
 			return plan.getTableIndexsByTuple(criteria.Right)
-		case "not in":
-			l, err := plan.getTableIndexsByTuple(criteria.Right)
-			if err != nil {
-				return nil, err
-			}
-			return plan.notList(l), nil
 		}
 	case *sqlparser.RangeCond: //between ... and ...
 		return plan.Rule.SubTableIndexs, nil
@@ -327,20 +322,21 @@ func (plan *Plan) calRouteIndexs() error {
 	}
 }
 
-func (plan *Plan) checkValuesType(vals sqlparser.Values) sqlparser.Values {
+func (plan *Plan) checkValuesType(vals sqlparser.Values) (sqlparser.Values, error) {
 	// Analyze first value of every item in the list
 	for i := 0; i < len(vals); i++ {
 		switch tuple := vals[i].(type) {
 		case sqlparser.ValTuple:
 			result := plan.getValueType(tuple[0])
 			if result != VALUE_NODE {
-				panic(sqlparser.NewParserError("insert is too complex"))
+				return nil, errors.ErrInsertTooComplex
 			}
 		default:
-			panic(sqlparser.NewParserError("insert is too complex"))
+			//panic(sqlparser.NewParserError("insert is too complex"))
+			return nil, errors.ErrInsertTooComplex
 		}
 	}
-	return vals
+	return vals, nil
 }
 
 /*返回valExpr表达式对应的类型*/
@@ -351,7 +347,7 @@ func (plan *Plan) getValueType(valExpr sqlparser.ValExpr) int {
 		if string(node.Qualifier) == plan.Rule.Table {
 			node.Qualifier = nil
 		}
-		if string(node.Name) == plan.Rule.Key {
+		if strings.ToLower(string(node.Name)) == plan.Rule.Key {
 			return EID_NODE //表示这是分片id对应的node
 		}
 	case sqlparser.ValTuple:
@@ -489,7 +485,7 @@ func (plan *Plan) GetIRKeyIndex(cols sqlparser.Columns) error {
 	for i, _ := range cols {
 		colname := string(cols[i].(*sqlparser.NonStarExpr).Expr.(*sqlparser.ColName).Name)
 
-		if colname == plan.Rule.Key {
+		if strings.ToLower(colname) == plan.Rule.Key {
 			plan.KeyIndex = i
 			break
 		}

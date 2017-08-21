@@ -76,12 +76,17 @@ func (c *ClientConn) handleSet(stmt *sqlparser.Set, sql string) (err error) {
 }
 
 func (c *ClientConn) handleSetAutoCommit(val sqlparser.ValExpr) error {
-	value, ok := val.(sqlparser.NumVal)
-	if !ok {
-		return fmt.Errorf("set autocommit error")
+	flag := sqlparser.String(val)
+	flag = strings.Trim(flag, "'`\"")
+	// autocommit允许为 0, 1, ON, OFF, "ON", "OFF", 不允许"0", "1"
+	if flag == `0` || flag == `1` {
+		_, ok := val.(sqlparser.NumVal)
+		if !ok {
+			return fmt.Errorf("set autocommit error")
+		}
 	}
-	switch value[0] {
-	case '1':
+	switch strings.ToUpper(flag) {
+	case `1`, `ON`:
 		c.status |= mysql.SERVER_STATUS_AUTOCOMMIT
 		if c.status&mysql.SERVER_STATUS_IN_TRANS > 0 {
 			c.status &= ^mysql.SERVER_STATUS_IN_TRANS
@@ -95,10 +100,10 @@ func (c *ClientConn) handleSetAutoCommit(val sqlparser.ValExpr) error {
 			co.Close()
 		}
 		c.txConns = make(map[*backend.Node]*backend.BackendConn)
-	case '0':
+	case `0`, `OFF`:
 		c.status &= ^mysql.SERVER_STATUS_AUTOCOMMIT
 	default:
-		return fmt.Errorf("invalid autocommit flag %s", value)
+		return fmt.Errorf("invalid autocommit flag %s", flag)
 	}
 
 	return c.writeOK(nil)
@@ -116,16 +121,20 @@ func (c *ClientConn) handleSetNames(ch, ci sqlparser.ValExpr) error {
 		return c.writeOK(nil)
 	}
 	if ci == nil {
+		if charset == "default" {
+			charset = mysql.DEFAULT_CHARSET
+		}
 		cid, ok = mysql.CharsetIds[charset]
 		if !ok {
 			return fmt.Errorf("invalid charset %s", charset)
 		}
 	} else {
 		collate := sqlparser.String(ci)
-		collate = strings.Trim(value, "'`\"")
+		collate = strings.Trim(collate, "'`\"")
+		collate = strings.ToLower(collate)
 		cid, ok = mysql.CollationNames[collate]
 		if !ok {
-			return fmt.Errorf("invalid charset %s", charset)
+			return fmt.Errorf("invalid collation %s", collate)
 		}
 	}
 	c.charset = charset
