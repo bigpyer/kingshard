@@ -87,6 +87,7 @@ func (r *Rule) FindTableIndex(key interface{}) (int, error) {
 }
 
 //UpdateExprs is the expression after set
+// 避免更新分区键
 func (r *Rule) checkUpdateExprs(exprs sqlparser.UpdateExprs) error {
 	if r.Type == DefaultRuleType {
 		return nil
@@ -174,11 +175,11 @@ func parseRule(cfg *config.ShardConfig) (*Rule, error) {
 	r.Table = cfg.Table
 	r.Key = strings.ToLower(cfg.Key) //ignore case
 	r.Type = cfg.Type
-	r.Nodes = cfg.Nodes //将ruleconfig中的nodes赋值给rule
-	r.TableToNode = make(map[int]int, 0)
+	r.Nodes = cfg.Nodes                  //将shard中的nodes赋值给rule
+	r.TableToNode = make(map[int]int, 0) //table下标到node下标的映射关系
 
 	switch r.Type {
-	case HashRuleType, RangeRuleType:
+	case HashRuleType, RangeRuleType: //hash、range表和节点对应关系是相同的
 		var sumTables int
 		if len(cfg.Locations) != len(r.Nodes) {
 			return nil, errors.ErrLocationsCount

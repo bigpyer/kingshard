@@ -104,6 +104,7 @@ func Open(addr string, user string, password string, dbName string, maxConnNum i
 			db.idleConns <- conn
 		}
 	}
+	//db ping时间戳
 	db.SetLastPing()
 
 	return db, nil

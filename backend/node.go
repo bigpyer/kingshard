@@ -190,9 +190,10 @@ func (n *Node) AddSlave(addr string) error {
 		weight = 1
 	}
 	n.SlaveWeights = append(n.SlaveWeights, weight)
-	if db, err = n.OpenDB(addrAndWeight[0]); err != nil {
+	if db, err = n.OpenDB(addrAndWeight[0]); err != nil { // 建立连接池
 		return err
 	} else {
+		// 重新初始化RRBalancer
 		n.Slave = append(n.Slave, db)
 		n.InitBalancer()
 		return nil

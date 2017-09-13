@@ -281,7 +281,7 @@ func (plan *Plan) getDateShardTableIndex(expr sqlparser.BoolExpr) ([]int, error)
 	return plan.RouteTableIndexs, nil
 }
 
-//计算本次执行计划表下标和节点下标
+//计算本次执行计划表和节点下标数组
 func (plan *Plan) calRouteIndexs() error {
 	var err error
 	nodesCount := len(plan.Rule.Nodes)
@@ -730,6 +730,7 @@ func cleanList(l []int) []int {
 	return l2
 }
 
+//根据table index获取node index
 func (plan *Plan) TindexsToNindexs(tableIndexs []int) []int {
 	count := len(tableIndexs)
 	nodeIndes := make([]int, 0, count)

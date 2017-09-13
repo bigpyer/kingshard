@@ -158,7 +158,7 @@ func (s *Server) parseNode(cfg config.NodeConfig) (*backend.Node, error) {
 	/* 节点配置 */
 	n.Cfg = cfg
 
-	/* 标记节点下线的间隔时间 */
+	/* 标记节点下线的间隔时间,单位: 秒 */
 	n.DownAfterNoAlive = time.Duration(cfg.DownAfterNoAlive) * time.Second
 	/* 建立node节点内ks与主实例连接池并初始化DB状态为Unknown */
 	err = n.ParseMaster(cfg.Master)
