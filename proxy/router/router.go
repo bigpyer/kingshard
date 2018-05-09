@@ -112,8 +112,8 @@ func NewRouter(schemaConfig *config.SchemaConfig) (*Router, error) {
 	}
 
 	rt := new(Router)
-	rt.Nodes = schemaConfig.Nodes //对应schema中的nodes
-	rt.Rules = make(map[string]map[string]*Rule)
+	rt.Nodes = schemaConfig.Nodes                //对应schema中的nodes
+	rt.Rules = make(map[string]map[string]*Rule) // key: db+table value: Rule
 	rt.DefaultRule = NewDefaultRule(schemaConfig.Default)
 
 	/* 遍历shard,获取每个分表配置信息 */
@@ -168,7 +168,7 @@ func (r *Router) GetRule(db, table string) *Rule {
 	}
 }
 
-//解析分表规则
+//解析分表规则,获取分表、节点对应关系，赋值对应的shard。
 func parseRule(cfg *config.ShardConfig) (*Rule, error) {
 	r := new(Rule)
 	r.DB = cfg.DB
@@ -235,7 +235,7 @@ func parseRule(cfg *config.ShardConfig) (*Rule, error) {
 		}
 	}
 
-	//获取hash、range计算基数，并获取分表计算对应的handler
+	//获取hash、range计算基数，并获取分表计算对应的shard
 	if err := parseShard(r, cfg); err != nil {
 		return nil, err
 	}
@@ -386,7 +386,7 @@ func (r *Router) buildInsertPlan(db string, statement sqlparser.Statement) (*Pla
 		return nil, err
 	}
 
-	/* TODO 没有看明白 计算分表目标表下标、节点下标 */
+	/* TODO 计算分表目标表下标、节点下标 */
 	err := plan.calRouteIndexs()
 	if err != nil {
 		golog.Error("Route", "BuildInsertPlan", err.Error(), 0)
