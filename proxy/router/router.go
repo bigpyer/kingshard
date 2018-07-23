@@ -235,7 +235,7 @@ func parseRule(cfg *config.ShardConfig) (*Rule, error) {
 		}
 	}
 
-	//获取hash、range计算基数，并获取分表计算对应的shard
+	//获取hash、range计算基数并获取分表计算对应的shard对象
 	if err := parseShard(r, cfg); err != nil {
 		return nil, err
 	}

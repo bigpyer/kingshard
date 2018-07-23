@@ -286,6 +286,7 @@ func (plan *Plan) calRouteIndexs() error {
 	var err error
 	nodesCount := len(plan.Rule.Nodes)
 
+	// 如果是默认规则，返回第一个节点
 	if plan.Rule.Type == DefaultRuleType {
 		plan.RouteNodeIndexs = []int{0}
 		return nil
